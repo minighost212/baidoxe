@@ -10,6 +10,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <string>
 
 #include <glm/glm.hpp>
@@ -110,9 +111,15 @@ private:
 };
 
 inline bool AeonMallExterior::initialise() {
+    std::fprintf(stderr, "[scene] loading OBJ...\n"); std::fflush(stderr);
     const std::vector<std::string> exclude = {"ground", "walk"};
-    if (!buildingModel_.load("model/aeon_danang_v3.obj", exclude)) return false;
+    if (!buildingModel_.load("model/aeon_danang_v3.obj", exclude)) {
+        std::fprintf(stderr, "[scene] OBJ load FAILED\n"); std::fflush(stderr);
+        return false;
+    }
+    std::fprintf(stderr, "[scene] uploading OBJ to GPU...\n"); std::fflush(stderr);
     buildingModel_.upload();
+    std::fprintf(stderr, "[scene] OBJ upload done.\n"); std::fflush(stderr);
     const glm::vec3 bmin = buildingModel_.boundingBoxMin();
     const glm::vec3 bmax = buildingModel_.boundingBoxMax();
     const glm::vec3 center((bmin.x + bmax.x) * 0.5f, bmin.y,
@@ -565,19 +572,20 @@ inline void BasementRamp::drawSafetyMarkings(float upperLevelY, float lowerLevel
     const glm::vec3 white(0.83f, 0.84f, 0.81f);
     const glm::vec3 yellow(0.95f, 0.69f, 0.08f);
     const glm::vec3 black(0.10f, 0.11f, 0.12f);
-    const float markingY = midY + AeonLayout::MARKING_HEIGHT_M * AeonLayout::GEOMETRY_HALF_RATIO;
+    (void)midY;
 
     for (int dash = 0; dash < AeonLayout::RAMP_LANE_DASH_COUNT; ++dash) {
         const float x = AeonLayout::RAMP_START_X_M + AeonLayout::RAMP_LANE_DASH_START_OFFSET_M +
                         static_cast<float>(dash) * AeonLayout::RAMP_LANE_DASH_SPACING_M;
         for (const float laneZ : {AeonLayout::ENTRY_LANE_CENTER_Z_M,
                                   AeonLayout::EXIT_LANE_CENTER_Z_M}) {
-            renderer_.drawOrientedBox(
-                glm::vec3(x, AeonLayout::rampYAtX(x, upperLevelY, lowerLevelY) +
-                                  AeonLayout::MARKING_HEIGHT_M * AeonLayout::GEOMETRY_HALF_RATIO, laneZ),
-                glm::vec3(AeonLayout::RAMP_LANE_DASH_LENGTH_M,
-                          AeonLayout::MARKING_HEIGHT_M,
-                          AeonLayout::RAMP_LANE_MARKING_WIDTH_M), rampAngle, white);
+            const glm::mat4 m =
+                glm::translate(glm::mat4(1.0f),
+                    glm::vec3(x, AeonLayout::rampYAtX(x, upperLevelY, lowerLevelY) + 0.0002f, laneZ)) *
+                glm::rotate(glm::mat4(1.0f), rampAngle, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                glm::scale(glm::mat4(1.0f),
+                    glm::vec3(AeonLayout::RAMP_LANE_DASH_LENGTH_M, 1.0f, AeonLayout::RAMP_LANE_MARKING_WIDTH_M));
+            renderer_.draw(renderer_.quadMesh(), m, white);
         }
     }
 
@@ -586,23 +594,35 @@ inline void BasementRamp::drawSafetyMarkings(float upperLevelY, float lowerLevel
         const float edgeZ = laneZ +
             (laneZ < 0.0f ? AeonLayout::RAMP_EDGE_MARKING_OFFSET_M
                           : -AeonLayout::RAMP_EDGE_MARKING_OFFSET_M);
-        renderer_.drawOrientedBox(
-            glm::vec3(AeonLayout::RAMP_MID_X_M, markingY, edgeZ),
-            glm::vec3(AeonLayout::RAMP_LENGTH_X_M, AeonLayout::MARKING_HEIGHT_M,
-                      AeonLayout::RAMP_LANE_MARKING_WIDTH_M), rampAngle, yellow);
+        const glm::mat4 m =
+            glm::translate(glm::mat4(1.0f),
+                glm::vec3(AeonLayout::RAMP_MID_X_M,
+                          AeonLayout::rampYAtX(AeonLayout::RAMP_MID_X_M, upperLevelY, lowerLevelY) + 0.0002f,
+                          edgeZ)) *
+            glm::rotate(glm::mat4(1.0f), rampAngle, glm::vec3(0.0f, 0.0f, 1.0f)) *
+            glm::scale(glm::mat4(1.0f),
+                glm::vec3(AeonLayout::RAMP_LENGTH_X_M, 1.0f, AeonLayout::RAMP_LANE_MARKING_WIDTH_M));
+        renderer_.draw(renderer_.quadMesh(), m, yellow);
     }
 
     const int stripeCount = static_cast<int>(
         AeonLayout::RAMP_LENGTH_X_M / AeonLayout::RAMP_SAFETY_STRIPE_SPACING_M);
-    const float stripeY = midY + AeonLayout::RAMP_EDGE_WALL_HEIGHT_M +
-                          AeonLayout::RAMP_SAFETY_STRIPE_HEIGHT_M * AeonLayout::GEOMETRY_HALF_RATIO;
+    const float stripeBaseY = AeonLayout::RAMP_EDGE_WALL_HEIGHT_M;
     for (const float side : {-1.0f, 1.0f}) {
         const float wallFaceZ = side * (AeonLayout::RAMP_TOTAL_WIDTH_Z_M * AeonLayout::GEOMETRY_HALF_RATIO -
                                         AeonLayout::RAMP_STRIPE_FACE_OFFSET_M);
-        renderer_.drawOrientedBox(
-            glm::vec3(AeonLayout::RAMP_MID_X_M, stripeY, wallFaceZ),
-            glm::vec3(AeonLayout::RAMP_LENGTH_X_M, AeonLayout::RAMP_SAFETY_STRIPE_HEIGHT_M,
-                      AeonLayout::RAMP_STRIPE_DEPTH_M), rampAngle, black);
+        // Continuous black band on the retaining wall face.
+        const glm::mat4 band =
+            glm::translate(glm::mat4(1.0f),
+                glm::vec3(AeonLayout::RAMP_MID_X_M,
+                          AeonLayout::rampYAtX(AeonLayout::RAMP_MID_X_M, upperLevelY, lowerLevelY) +
+                              stripeBaseY + AeonLayout::RAMP_SAFETY_STRIPE_HEIGHT_M * AeonLayout::GEOMETRY_HALF_RATIO,
+                          wallFaceZ + side * 0.0005f)) *
+            glm::rotate(glm::mat4(1.0f), rampAngle, glm::vec3(0.0f, 0.0f, 1.0f)) *
+            glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
+            glm::scale(glm::mat4(1.0f),
+                glm::vec3(AeonLayout::RAMP_LENGTH_X_M, 1.0f, AeonLayout::RAMP_SAFETY_STRIPE_HEIGHT_M));
+        renderer_.draw(renderer_.quadMesh(), band, black);
     }
 
     for (int stripe = 0; stripe <= stripeCount; ++stripe) {
@@ -610,22 +630,20 @@ inline void BasementRamp::drawSafetyMarkings(float upperLevelY, float lowerLevel
                         static_cast<float>(stripe) * AeonLayout::RAMP_SAFETY_STRIPE_SPACING_M;
         if (x > AeonLayout::RAMP_END_X_M - AeonLayout::RAMP_STRIPE_END_MARGIN_M) continue;
         const float y = AeonLayout::rampYAtX(x, upperLevelY, lowerLevelY) +
-                        AeonLayout::RAMP_EDGE_WALL_HEIGHT_M +
+                        stripeBaseY +
                         AeonLayout::RAMP_SAFETY_STRIPE_HEIGHT_M * AeonLayout::GEOMETRY_HALF_RATIO;
         for (const float side : {-1.0f, 1.0f}) {
             const float wallFaceZ = side * (AeonLayout::RAMP_TOTAL_WIDTH_Z_M * AeonLayout::GEOMETRY_HALF_RATIO -
                                             AeonLayout::RAMP_STRIPE_FACE_OFFSET_M);
-            const float stripeZ = wallFaceZ - side * AeonLayout::RAMP_STRIPE_DEPTH_M;
             const glm::mat4 stripeModel =
-                glm::translate(glm::mat4(1.0f), glm::vec3(x, y, stripeZ)) *
+                glm::translate(glm::mat4(1.0f), glm::vec3(x, y, wallFaceZ + side * 0.0006f)) *
                 glm::rotate(glm::mat4(1.0f), rampAngle +
                             side * AeonLayout::RAMP_SAFETY_STRIPE_ANGLE_RAD,
                             glm::vec3(0.0f, 0.0f, 1.0f)) *
-                glm::translate(glm::mat4(1.0f), glm::vec3(0.0f,
-                    -AeonLayout::RAMP_SAFETY_STRIPE_HEIGHT_M * AeonLayout::GEOMETRY_HALF_RATIO, 0.0f)) *
+                glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
                 glm::scale(glm::mat4(1.0f), glm::vec3(AeonLayout::RAMP_SAFETY_STRIPE_WIDTH_M,
-                    AeonLayout::RAMP_SAFETY_STRIPE_HEIGHT_M, AeonLayout::RAMP_STRIPE_DEPTH_M));
-            renderer_.draw(renderer_.boxMesh(), stripeModel, yellow);
+                    1.0f, AeonLayout::RAMP_SAFETY_STRIPE_HEIGHT_M));
+            renderer_.draw(renderer_.quadMesh(), stripeModel, yellow);
         }
     }
 }
@@ -810,7 +828,7 @@ inline void SceneRenderer::render(const ParkingWorld& world, const ElevatorSyste
 
 inline void SceneRenderer::drawShell(float floorY) {
     const float ceilingY = floorY + AeonLayout::FLOOR_TO_CEILING_M;
-    const glm::vec3 floorColor(0.72f, 0.74f, 0.76f);       // Epoxy xám sáng bóng như ảnh thật
+    const glm::vec3 floorColor(0.22f, 0.23f, 0.25f);       // Epoxy xám đậm hơi bóng
     const glm::vec3 wallUpperColor(0.92f, 0.93f, 0.95f);   // Nửa trên tường sơn trắng kem sáng
     const glm::vec3 wallLowerColor(0.55f, 0.58f, 0.62f);   // Nửa dưới tường sơn xám ghi đậm như ảnh
     const glm::vec3 wallStripeColor(0.98f, 0.78f, 0.05f);  // Chỉ phân cách vàng nghệ
@@ -830,8 +848,14 @@ inline void SceneRenderer::drawShell(float floorY) {
                       glm::vec3(AeonLayout::ZONE_LENGTH_X_M, splitH, AeonLayout::WALL_THICKNESS_M), wallLowerColor);
     renderer_.drawBox(glm::vec3(AeonLayout::WORLD_ORIGIN_X_M, floorY + splitH, AeonLayout::ZONE_MIN_Z_M),
                       glm::vec3(AeonLayout::ZONE_LENGTH_X_M, upperH, AeonLayout::WALL_THICKNESS_M), wallUpperColor);
-    renderer_.drawBox(glm::vec3(AeonLayout::WORLD_ORIGIN_X_M, floorY + splitH - 0.02f, AeonLayout::ZONE_MIN_Z_M + 0.01f),
-                      glm::vec3(AeonLayout::ZONE_LENGTH_X_M, 0.04f, 0.02f), wallStripeColor);
+    {
+        const glm::vec3 c(AeonLayout::WORLD_ORIGIN_X_M, floorY + splitH - 0.006f,
+                          AeonLayout::ZONE_MIN_Z_M + AeonLayout::WALL_THICKNESS_M + 0.0005f);
+        const glm::mat4 m = glm::translate(glm::mat4(1.0f), c) *
+                            glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
+                            glm::scale(glm::mat4(1.0f), glm::vec3(AeonLayout::ZONE_LENGTH_X_M, 1.0f, 0.012f));
+        renderer_.draw(renderer_.quadMesh(), m, wallStripeColor);
+    }
 
     // Tường bao phía Bắc (có cửa mở sang khu vực xe máy, 2 tông màu)
     const float bikeOpeningSegmentX =
@@ -846,8 +870,14 @@ inline void SceneRenderer::drawShell(float floorY) {
                           glm::vec3(bikeOpeningSegmentX, splitH, AeonLayout::WALL_THICKNESS_M), wallLowerColor);
         renderer_.drawBox(glm::vec3(segmentCenterX, floorY + splitH, AeonLayout::ZONE_MAX_Z_M - AeonLayout::WALL_THICKNESS_M),
                           glm::vec3(bikeOpeningSegmentX, upperH, AeonLayout::WALL_THICKNESS_M), wallUpperColor);
-        renderer_.drawBox(glm::vec3(segmentCenterX, floorY + splitH - 0.02f, AeonLayout::ZONE_MAX_Z_M - AeonLayout::WALL_THICKNESS_M - 0.01f),
-                          glm::vec3(bikeOpeningSegmentX, 0.04f, 0.02f), wallStripeColor);
+        {
+            const glm::vec3 c(segmentCenterX, floorY + splitH - 0.006f,
+                              AeonLayout::ZONE_MAX_Z_M - AeonLayout::WALL_THICKNESS_M - 0.0005f);
+            const glm::mat4 m = glm::translate(glm::mat4(1.0f), c) *
+                                glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
+                                glm::scale(glm::mat4(1.0f), glm::vec3(bikeOpeningSegmentX, 1.0f, 0.012f));
+            renderer_.draw(renderer_.quadMesh(), m, wallStripeColor);
+        }
     }
 
     // Tường bao phía Đông (có cửa mở vào sảnh thang máy, 2 tông màu)
@@ -863,8 +893,14 @@ inline void SceneRenderer::drawShell(float floorY) {
                           glm::vec3(AeonLayout::WALL_THICKNESS_M, splitH, liftOpeningSegmentZ), wallLowerColor);
         renderer_.drawBox(glm::vec3(AeonLayout::ZONE_MAX_X_M - AeonLayout::WALL_THICKNESS_M, floorY + splitH, segmentCenterZ),
                           glm::vec3(AeonLayout::WALL_THICKNESS_M, upperH, liftOpeningSegmentZ), wallUpperColor);
-        renderer_.drawBox(glm::vec3(AeonLayout::ZONE_MAX_X_M - AeonLayout::WALL_THICKNESS_M - 0.01f, floorY + splitH - 0.02f, segmentCenterZ),
-                          glm::vec3(0.02f, 0.04f, liftOpeningSegmentZ), wallStripeColor);
+        {
+            const glm::vec3 c(AeonLayout::ZONE_MAX_X_M - AeonLayout::WALL_THICKNESS_M - 0.0005f,
+                              floorY + splitH - 0.006f, segmentCenterZ);
+            const glm::mat4 m = glm::translate(glm::mat4(1.0f), c) *
+                                glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                glm::scale(glm::mat4(1.0f), glm::vec3(0.012f, 1.0f, liftOpeningSegmentZ));
+            renderer_.draw(renderer_.quadMesh(), m, wallStripeColor);
+        }
     }
 
     // Tường bao phía Tây (có cửa mở ra dốc xe, 2 tông màu)
@@ -878,8 +914,14 @@ inline void SceneRenderer::drawShell(float floorY) {
                           glm::vec3(AeonLayout::WALL_THICKNESS_M, splitH, westWallSegmentLength), wallLowerColor);
         renderer_.drawBox(glm::vec3(AeonLayout::ZONE_MIN_X_M, floorY + splitH, wCenterZ),
                           glm::vec3(AeonLayout::WALL_THICKNESS_M, upperH, westWallSegmentLength), wallUpperColor);
-        renderer_.drawBox(glm::vec3(AeonLayout::ZONE_MIN_X_M + 0.01f, floorY + splitH - 0.02f, wCenterZ),
-                          glm::vec3(0.02f, 0.04f, westWallSegmentLength), wallStripeColor);
+        {
+            const glm::vec3 c(AeonLayout::ZONE_MIN_X_M + AeonLayout::WALL_THICKNESS_M + 0.0005f,
+                              floorY + splitH - 0.006f, wCenterZ);
+            const glm::mat4 m = glm::translate(glm::mat4(1.0f), c) *
+                                glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                glm::scale(glm::mat4(1.0f), glm::vec3(0.012f, 1.0f, westWallSegmentLength));
+            renderer_.draw(renderer_.quadMesh(), m, wallStripeColor);
+        }
     }
     (void)ceilingY;
 }
@@ -916,20 +958,25 @@ inline void SceneRenderer::drawRealisticColumns(const ParkingWorld& world, float
         // 4. HỌA TIẾT SỌC CHỮ V CHÚC XUỐNG (CHEVRON STRIPES) TRÊN CẢ 4 MẶT CỘT
         const float bandLen = 0.38f;       // Chiều dài nhánh chữ V
         const float bandThick = 0.085f;    // Bề rộng dải sọc đen
-        const float bandDepth = 0.02f;     // Độ dày nhô ra nhẹ
-        const float faceDist = colSize * 0.5f + 0.012f; // Vị trí sát mặt cột
+        const float faceDist = colSize * 0.5f + 0.0005f; // Sát mặt cột, lồi 0.5mm tránh z-fight
 
-        auto drawArm = [&](const glm::vec3& center, float angleDeg, int axis) {
+        // Vẽ một nhánh chữ V phẳng trên mặt cột (giống sơn, không lồi).
+        // face: 0 = Nam(-Z), 1 = Bắc(+Z), 2 = Tây(-X), 3 = Đông(+X)
+        auto drawArm = [&](const glm::vec3& center, float angleDeg, int face) {
             glm::mat4 m = glm::translate(glm::mat4(1.0f), center);
-            if (axis == 0) {
+            if (face <= 1) {
+                // Mặt Nam/Bắc: dải phẳng nằm trong mặt phẳng XY (Z cố định)
                 m = glm::rotate(m, glm::radians(angleDeg), glm::vec3(0.0f, 0.0f, 1.0f));
-                m = glm::scale(m, glm::vec3(bandLen, bandThick, bandDepth));
+                m = glm::rotate(m, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                m = glm::scale(m, glm::vec3(bandLen, 1.0f, bandThick));
             } else {
+                // Mặt Tây/Đông: dải phẳng nằm trong mặt phẳng YZ (X cố định)
+                const float faceRot = (face == 2) ? 90.0f : -90.0f; // Tây: pháp tuyến -X, Đông: +X
                 m = glm::rotate(m, glm::radians(angleDeg), glm::vec3(1.0f, 0.0f, 0.0f));
-                m = glm::scale(m, glm::vec3(bandDepth, bandThick, bandLen));
+                m = glm::rotate(m, glm::radians(faceRot), glm::vec3(0.0f, 0.0f, 1.0f));
+                m = glm::scale(m, glm::vec3(bandThick, 1.0f, bandLen));
             }
-            m = m * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.5f, 0.0f));
-            renderer_.draw(renderer_.boxMesh(), m, hazardBlack);
+            renderer_.draw(renderer_.quadMesh(), m, hazardBlack);
         };
 
         // 4 dải chữ V đen ở các tầng độ cao khác nhau từ sàn lên
@@ -942,16 +989,16 @@ inline void SceneRenderer::drawRealisticColumns(const ParkingWorld& world, float
             drawArm(glm::vec3(col.x + 0.15f, y + 0.09f, col.z - faceDist),  35.0f, 0);
 
             // Mặt Bắc (hướng +Z): Chữ V chúc xuống \/ ở trung tâm X
-            drawArm(glm::vec3(col.x - 0.15f, y + 0.09f, col.z + faceDist), -35.0f, 0);
-            drawArm(glm::vec3(col.x + 0.15f, y + 0.09f, col.z + faceDist),  35.0f, 0);
+            drawArm(glm::vec3(col.x - 0.15f, y + 0.09f, col.z + faceDist), -35.0f, 1);
+            drawArm(glm::vec3(col.x + 0.15f, y + 0.09f, col.z + faceDist),  35.0f, 1);
 
             // Mặt Tây (hướng -X): Chữ V chúc xuống \/ ở trung tâm Z
-            drawArm(glm::vec3(col.x - faceDist, y + 0.09f, col.z - 0.15f),  35.0f, 1);
-            drawArm(glm::vec3(col.x - faceDist, y + 0.09f, col.z + 0.15f), -35.0f, 1);
+            drawArm(glm::vec3(col.x - faceDist, y + 0.09f, col.z - 0.15f),  35.0f, 2);
+            drawArm(glm::vec3(col.x - faceDist, y + 0.09f, col.z + 0.15f), -35.0f, 2);
 
             // Mặt Đông (hướng +X): Chữ V chúc xuống \/ ở trung tâm Z
-            drawArm(glm::vec3(col.x + faceDist, y + 0.09f, col.z - 0.15f),  35.0f, 1);
-            drawArm(glm::vec3(col.x + faceDist, y + 0.09f, col.z + 0.15f), -35.0f, 1);
+            drawArm(glm::vec3(col.x + faceDist, y + 0.09f, col.z - 0.15f),  35.0f, 3);
+            drawArm(glm::vec3(col.x + faceDist, y + 0.09f, col.z + 0.15f), -35.0f, 3);
         }
 
         // 5. ỐNG KỸ THUẬT MẠ KẼM BẠC SÁNG KẸP DỌC THÂN CỘT (như trong ảnh thật)
@@ -1170,8 +1217,7 @@ inline void SceneRenderer::drawLaneMarkings(float floorY) {
 
 inline void SceneRenderer::drawArrow(float x, float z, float yaw, float floorY) {
     const glm::mat4 base =
-        glm::translate(glm::mat4(1.0f),
-                       glm::vec3(x, floorY + AeonLayout::MARKING_HEIGHT_M, z)) *
+        glm::translate(glm::mat4(1.0f), glm::vec3(x, floorY + 0.0002f, z)) *
         glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0.0f, 1.0f, 0.0f));
     const glm::vec3 arrowColor(0.92f, 0.88f, 0.66f);
     const glm::mat4 shaft =
@@ -1180,8 +1226,8 @@ inline void SceneRenderer::drawArrow(float x, float z, float yaw, float floorY) 
                                         0.0f, 0.0f)) *
         glm::scale(glm::mat4(1.0f),
                    glm::vec3(AeonLayout::ARROW_LENGTH_M * AeonLayout::ARROW_SHAFT_LENGTH_RATIO,
-                             AeonLayout::MARKING_HEIGHT_M, AeonLayout::ARROW_STROKE_M));
-    renderer_.draw(renderer_.boxMesh(), shaft, arrowColor);
+                             1.0f, AeonLayout::ARROW_STROKE_M));
+    renderer_.draw(renderer_.quadMesh(), shaft, arrowColor);
     for (int side : {-1, 1}) {
         const float angle = side > 0 ? AeonLayout::ARROW_HEAD_ANGLE_RAD
                                      : -AeonLayout::ARROW_HEAD_ANGLE_RAD;
@@ -1194,54 +1240,76 @@ inline void SceneRenderer::drawArrow(float x, float z, float yaw, float floorY) 
             glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f)) *
             glm::scale(glm::mat4(1.0f),
                        glm::vec3(AeonLayout::ARROW_LENGTH_M * AeonLayout::ARROW_HEAD_LENGTH_RATIO,
-                                 AeonLayout::MARKING_HEIGHT_M, AeonLayout::ARROW_STROKE_M));
-        renderer_.draw(renderer_.boxMesh(), head, arrowColor);
+                                 1.0f, AeonLayout::ARROW_STROKE_M));
+        renderer_.draw(renderer_.quadMesh(), head, arrowColor);
     }
 }
 
 inline void SceneRenderer::drawParkingSlot(const ParkingSlot& slot, float floorY) {
-    // Sàn ô đỗ xe màu xám Epoxy đồng bộ với sàn hầm
-    glm::vec3 fillColor(0.69f, 0.72f, 0.74f);
+    // Sàn ô đỗ xe màu xám đậm đồng bộ với sàn hầm
+    glm::vec3 fillColor(0.19f, 0.20f, 0.22f);
     if (slot.state() == ParkingSlot::State::Reserved) fillColor = glm::vec3(0.62f, 0.44f, 0.18f);
     if (slot.state() == ParkingSlot::State::Occupied) fillColor = glm::vec3(0.58f, 0.22f, 0.20f);
-    renderer_.drawBox(
-        glm::vec3(slot.center().x, floorY + AeonLayout::BAY_FILL_FLOOR_OFFSET_M, slot.center().z),
-        glm::vec3(AeonLayout::STALL_W_M - AeonLayout::BAY_MARKING_WIDTH_M * 2.0f,
-                  AeonLayout::MARKING_HEIGHT_M * AeonLayout::BAY_FILL_HEIGHT_FACTOR,
+    renderer_.drawFlatXZ(
+        glm::vec3(slot.center().x, floorY + 0.0001f, slot.center().z),
+        glm::vec2(AeonLayout::STALL_W_M - AeonLayout::BAY_MARKING_WIDTH_M * 2.0f,
                   AeonLayout::STALL_L_M - AeonLayout::BAY_MARKING_WIDTH_M * 2.0f), fillColor);
 
     // Vạch kẻ sơn ô đỗ xe màu VÀNG NGHỆ TƯƠI như ảnh thực tế
     const glm::vec3 marking(0.96f, 0.78f, 0.08f);
     const float leftX = slot.center().x - AeonLayout::STALL_W_M * AeonLayout::GEOMETRY_HALF_RATIO;
     const float rightX = slot.center().x + AeonLayout::STALL_W_M * AeonLayout::GEOMETRY_HALF_RATIO;
-    renderer_.drawBox(glm::vec3(leftX, floorY + AeonLayout::MARKING_HEIGHT_M, slot.center().z),
-        glm::vec3(AeonLayout::BAY_MARKING_WIDTH_M, AeonLayout::MARKING_HEIGHT_M,
-                  AeonLayout::STALL_L_M), marking);
-    renderer_.drawBox(glm::vec3(rightX, floorY + AeonLayout::MARKING_HEIGHT_M, slot.center().z),
-        glm::vec3(AeonLayout::BAY_MARKING_WIDTH_M, AeonLayout::MARKING_HEIGHT_M,
-                  AeonLayout::STALL_L_M), marking);
+    renderer_.drawFlatXZ(glm::vec3(leftX, floorY + 0.0002f, slot.center().z),
+        glm::vec2(AeonLayout::BAY_MARKING_WIDTH_M, AeonLayout::STALL_L_M), marking);
+    renderer_.drawFlatXZ(glm::vec3(rightX, floorY + 0.0002f, slot.center().z),
+        glm::vec2(AeonLayout::BAY_MARKING_WIDTH_M, AeonLayout::STALL_L_M), marking);
     const float rearZ = slot.center().z + static_cast<float>(slot.rowSide()) *
                         AeonLayout::STALL_L_M * AeonLayout::GEOMETRY_HALF_RATIO;
-    renderer_.drawBox(glm::vec3(slot.center().x, floorY + AeonLayout::MARKING_HEIGHT_M, rearZ),
-        glm::vec3(AeonLayout::STALL_W_M, AeonLayout::MARKING_HEIGHT_M,
-                  AeonLayout::BAY_MARKING_WIDTH_M), marking);
+    renderer_.drawFlatXZ(glm::vec3(slot.center().x, floorY + 0.0002f, rearZ),
+        glm::vec2(AeonLayout::STALL_W_M, AeonLayout::BAY_MARKING_WIDTH_M), marking);
 
-    // THANH ỐNG THÉP CHẶN BÁNH XE MÀU VÀNG (3D Yellow Tubular Steel Stopper Rail) như trong ảnh
-    const glm::vec3 pipeYellow(0.98f, 0.78f, 0.05f); // Vàng tươi rực rỡ sơn bóng
-    const glm::vec3 boltColor(0.20f, 0.22f, 0.24f);  // Bu lông chân đế thép
+    // CHẶN BÁNH XE CAO SU 3D (Rubber Wheel Stop) dài 1.8m, cao 0.12m - giống thật
+    // Đặt ở đầu ô đỗ (phía đường chạy), cách mép trong 0.30m
+    const float stopLen = 1.80f;   // Chiều dài chặn bánh
+    const float stopH   = 0.12f;   // Chiều cao chặn bánh
+    const float stopW   = 0.16f;   // Chiều dày chặn bánh (bề rộng đế)
     const float stopperZ = slot.center().z + static_cast<float>(slot.rowSide()) *
-                           (AeonLayout::STALL_L_M * 0.5f - 0.60f);
+                           (AeonLayout::STALL_L_M * 0.5f - 0.30f);
+    const float stopperY = floorY + stopH * 0.5f;  // Tâm khối theo trục Y
 
-    // 1. Thanh ống thép tròn nằm ngang màu vàng dài 2.1m, bán kính 0.045m (phi 90), cao cách sàn 0.10m
-    renderer_.drawPipeX(glm::vec3(slot.center().x, floorY + 0.10f, stopperZ),
-                        2.10f, 0.045f, pipeYellow);
+    // Màu vật liệu cao su: đen sạm có ánh nhựa, sọc vàng phản quang
+    const glm::vec3 rubberBlack(0.07f, 0.07f, 0.08f);   // Cao su đen
+    const glm::vec3 rubberTop(0.11f, 0.11f, 0.12f);     // Mặt trên hơi sáng hơn
+    const glm::vec3 stripeYellow(0.95f, 0.75f, 0.06f);  // Sọc vàng phản quang
+    const glm::vec3 boltColor(0.18f, 0.19f, 0.21f);     // Bu lông chân đế thép mạ kẽm
 
-    // 2. Hai chân trụ ống thép tròn đỡ thanh ngang hàn bắt vít xuống sàn (tại X = +-0.65m)
+    // 1. Thân khối cao su chính - hình hộp chữ nhật dày đặc, dài 1.8m, cao 0.12m, dày 0.16m
+    renderer_.drawBox(glm::vec3(slot.center().x, stopperY, stopperZ),
+                      glm::vec3(stopLen, stopH, stopW), rubberBlack);
+
+    // 2. Mặt trên hơi vát sáng (lớp mỏng 0.01m trên đỉnh) tạo cảm giác bo gờ cao su thật
+    renderer_.drawBox(glm::vec3(slot.center().x, floorY + stopH - 0.005f, stopperZ),
+                      glm::vec3(stopLen, 0.01f, stopW), rubberTop);
+
+    // 3. Sọc vàng phản quang trên lưng chặn bánh - 3 dải đều nhau như kiểu thực tế
+    const float stripeLen = 0.42f;
+    const float stripeGap = (stopLen - 3.0f * stripeLen) / 4.0f;
+    for (int s = 0; s < 3; ++s) {
+        const float sx = slot.center().x - stopLen * 0.5f +
+                         stripeGap + static_cast<float>(s) * (stripeLen + stripeGap) +
+                         stripeLen * 0.5f;
+        renderer_.drawBox(glm::vec3(sx, floorY + stopH + 0.001f, stopperZ),
+                          glm::vec3(stripeLen, 0.004f, stopW - 0.01f), stripeYellow);
+    }
+
+    // 4. Đế bám và bu lông bắt vít xuống sàn ở hai đầu (như chặn bánh thật lắp anchor bolt)
     for (float px : {-0.65f, 0.65f}) {
-        renderer_.drawPipeY(glm::vec3(slot.center().x + px, floorY, stopperZ),
-                            0.10f, 0.035f, pipeYellow);
-        renderer_.drawBox(glm::vec3(slot.center().x + px, floorY, stopperZ),
-                          glm::vec3(0.18f, 0.015f, 0.18f), boltColor);
+        // Đế thép mỏng dưới đáy cao su
+        renderer_.drawBox(glm::vec3(slot.center().x + px, floorY + 0.006f, stopperZ),
+                          glm::vec3(0.22f, 0.012f, stopW + 0.03f), boltColor);
+        // Đầu bu lông trụ tròn nổi trên đế
+        renderer_.drawPipeY(glm::vec3(slot.center().x + px, floorY + 0.012f, stopperZ),
+                            0.020f, 0.018f, boltColor);
     }
 }
 
@@ -1282,10 +1350,8 @@ inline void SceneRenderer::drawLightFixtures(float floorY) {
 inline void SceneRenderer::drawMotorbikeArea(float floorY) {
     const glm::vec3 bayColor(0.13f, 0.19f, 0.16f);
     const glm::vec3 lineColor(0.86f, 0.87f, 0.80f);
-    renderer_.drawBox(glm::vec3(AeonLayout::BIKE_ZONE_CENTER_X_M,
-        floorY + AeonLayout::BAY_FILL_FLOOR_OFFSET_M, AeonLayout::BIKE_ZONE_CENTER_Z_M),
-        glm::vec3(AeonLayout::BIKE_ZONE_WIDTH_X_M, AeonLayout::MARKING_HEIGHT_M,
-                  AeonLayout::BIKE_ZONE_DEPTH_Z_M), bayColor);
+    renderer_.drawFlatXZ(glm::vec3(AeonLayout::BIKE_ZONE_CENTER_X_M, floorY + 0.0001f, AeonLayout::BIKE_ZONE_CENTER_Z_M),
+        glm::vec2(AeonLayout::BIKE_ZONE_WIDTH_X_M, AeonLayout::BIKE_ZONE_DEPTH_Z_M), bayColor);
     renderer_.drawBox(glm::vec3(AeonLayout::BIKE_ZONE_CENTER_X_M,
         floorY + AeonLayout::BIKE_ZONE_ACCESS_PATH_THICKNESS_M * AeonLayout::GEOMETRY_HALF_RATIO,
         AeonLayout::ZONE_MAX_Z_M + AeonLayout::BIKE_ZONE_GAP_FROM_ZONE_M *
@@ -1296,17 +1362,12 @@ inline void SceneRenderer::drawMotorbikeArea(float floorY) {
         for (int index = 0; index <= AeonLayout::BIKE_STALLS_PER_ROW; ++index) {
             const float x = AeonLayout::motorbikeSlotX(0) - AeonLayout::BIKE_STALL_W_M * AeonLayout::GEOMETRY_HALF_RATIO +
                             static_cast<float>(index) * AeonLayout::BIKE_STALL_W_M;
-            renderer_.drawBox(glm::vec3(x, floorY + AeonLayout::MARKING_HEIGHT_M,
-                AeonLayout::motorbikeSlotZ(row)),
-                glm::vec3(AeonLayout::BIKE_STALL_LINE_WIDTH_M, AeonLayout::MARKING_HEIGHT_M,
-                          AeonLayout::BIKE_STALL_L_M), lineColor);
+            renderer_.drawFlatXZ(glm::vec3(x, floorY + 0.0002f, AeonLayout::motorbikeSlotZ(row)),
+                glm::vec2(AeonLayout::BIKE_STALL_LINE_WIDTH_M, AeonLayout::BIKE_STALL_L_M), lineColor);
         }
     }
-    renderer_.drawBox(glm::vec3(AeonLayout::BIKE_ZONE_CENTER_X_M,
-        floorY + AeonLayout::MARKING_HEIGHT_M,
-        AeonLayout::BIKE_ZONE_CENTER_Z_M),
-        glm::vec3(AeonLayout::BIKE_ZONE_WIDTH_X_M, AeonLayout::MARKING_HEIGHT_M,
-                  AeonLayout::BIKE_STALL_LINE_WIDTH_M), lineColor);
+    renderer_.drawFlatXZ(glm::vec3(AeonLayout::BIKE_ZONE_CENTER_X_M, floorY + 0.0002f, AeonLayout::BIKE_ZONE_CENTER_Z_M),
+        glm::vec2(AeonLayout::BIKE_ZONE_WIDTH_X_M, AeonLayout::BIKE_STALL_LINE_WIDTH_M), lineColor);
 }
 
 inline void SceneRenderer::drawMotorbike(const ParkedMotorbike& bike) {
@@ -1510,7 +1571,7 @@ inline void Hud::render(const ParkingWorld& world, bool exteriorVisible, int wid
         ? "B2 LEVEL -7.0M ASSUMED" : "B1 LEVEL -3.5M ASSUMED";
     line(world.floorIndex() == AeonLayout::FLOOR_INDEX_B2
              ? "AEON PARKING - B2" : "AEON PARKING - B1", 0, white);
-    line("ZONE A SAMPLE 64 / APPROX 430 TOTAL", 1, white);
+    line("ZONE A SAMPLE 62 / APPROX 430 TOTAL", 1, white);
     line("CARS " + std::to_string(world.carCount() + (world.manualMode() ? 1 : 0)), 2, white);
     line("CAR FREE " + std::to_string(world.freeSlotCount()), 3, green);
     line("CAR RESERVED " + std::to_string(world.reservedSlotCount()), 4, amber);

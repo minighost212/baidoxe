@@ -60,7 +60,7 @@ inline constexpr float CAR_WHEEL_RADIUS_M = 0.30f; // [ASSUMED] Procedural Vios 
 inline constexpr float STALL_W_M = 2.5f; // [ASSUMED] Reference car-space width; not surveyed at AEON.
 inline constexpr float STALL_L_M = 5.0f; // [ASSUMED] Reference car-space length; not surveyed at AEON.
 inline constexpr float STALL_ANGLE_DEG = 90.0f; // [ASSUMED] Perpendicular parking.
-inline constexpr float AISLE_W_M = 6.0f; // [ASSUMED] Two-way aisle reference width.
+inline constexpr float AISLE_W_M = 5.5f; // [ASSUMED] Main car aisle width requested for the layout.
 inline constexpr float PERIMETER_LANE_W_M = 6.0f; // [ASSUMED] Perimeter circulation lane reference width.
 inline constexpr float COLUMN_SIZE_M = 0.6f; // [ASSUMED] Square column section; not surveyed.
 inline constexpr int STALLS_PER_COLUMN_SPAN = 3; // [ASSUMED] Column grid reference interval.
@@ -79,17 +79,20 @@ inline constexpr float BARRIER_ARM_LEN_M = 3.0f; // [ASSUMED] Reference barrier-
 inline constexpr int MODULE_COUNT_Z = 2; // [ASSUMED] Two parallel 16 m modules.
 inline constexpr int ROWS_PER_MODULE = 2; // [ASSUMED] Two parking rows around each module aisle.
 inline constexpr float PARKING_CORE_LENGTH_X_M = 40.0f; // [ASSUMED] 16 x 2.5 m along X.
-inline constexpr float MODULE_WIDTH_Z_M = STALL_L_M + AISLE_W_M + STALL_L_M; // [DERIVED] 16 m.
-inline constexpr float PARKING_CORE_WIDTH_Z_M = MODULE_COUNT_Z * MODULE_WIDTH_Z_M; // [DERIVED] Two 16 m modules = 32 m.
+inline constexpr float MODULE_WIDTH_Z_M = STALL_L_M + AISLE_W_M + STALL_L_M; // [DERIVED] 15.5 m.
+inline constexpr float PARKING_CORE_WIDTH_Z_M = MODULE_COUNT_Z * MODULE_WIDTH_Z_M; // [DERIVED] Two 15.5 m modules = 31 m.
 inline constexpr int STALLS_PER_ROW = static_cast<int>(PARKING_CORE_LENGTH_X_M / STALL_W_M); // [DERIVED] 40 m / 2.5 m = 16 spaces per row.
 inline constexpr int ROW_COUNT = MODULE_COUNT_Z * ROWS_PER_MODULE; // [DERIVED] 4 rows.
-inline constexpr int TOTAL_ZONE_A_CAR_SLOTS = MODULE_COUNT_Z * ROWS_PER_MODULE * STALLS_PER_ROW; // [DERIVED] 64 stalls.
-inline constexpr float PARKING_CORE_AREA_M2 = PARKING_CORE_LENGTH_X_M * PARKING_CORE_WIDTH_Z_M; // [DERIVED] 40 x 32 = 1,280 m2.
+inline constexpr int ENTRY_CONNECTOR_CLEARANCE_SLOT_COUNT = 2; // [DERIVED] Two inner-row stalls removed to keep the entry/exit turn clear.
+inline constexpr int TOTAL_ZONE_A_CAR_SLOTS =
+    MODULE_COUNT_Z * ROWS_PER_MODULE * STALLS_PER_ROW -
+    ENTRY_CONNECTOR_CLEARANCE_SLOT_COUNT; // [DERIVED] 62 stalls after clearing the connector.
+inline constexpr float PARKING_CORE_AREA_M2 = PARKING_CORE_LENGTH_X_M * PARKING_CORE_WIDTH_Z_M; // [DERIVED] 40 x 31 = 1,240 m2.
 inline constexpr float ZONE_A_SHARE_OF_COMPLEX_CAR_CAPACITY_PERCENT =
     100.0f * static_cast<float>(TOTAL_ZONE_A_CAR_SLOTS) /
-    static_cast<float>(COMPLEX_CAR_CAPACITY_APPROX); // [DERIVED] 64 / 430, approximately 14.9%.
+    static_cast<float>(COMPLEX_CAR_CAPACITY_APPROX); // [DERIVED] 62 / 430, approximately 14.4%.
 inline constexpr float ZONE_LENGTH_X_M = PARKING_CORE_LENGTH_X_M + 2.0f * PERIMETER_LANE_W_M; // [DERIVED] 52 m.
-inline constexpr float ZONE_WIDTH_Z_M = PARKING_CORE_WIDTH_Z_M + 2.0f * PERIMETER_LANE_W_M; // [DERIVED] 44 m.
+inline constexpr float ZONE_WIDTH_Z_M = PARKING_CORE_WIDTH_Z_M + 2.0f * PERIMETER_LANE_W_M; // [DERIVED] 43 m.
 inline constexpr float CORE_MIN_X_M = -PARKING_CORE_LENGTH_X_M * 0.5f; // [DERIVED] -20 m.
 inline constexpr float CORE_MAX_X_M = PARKING_CORE_LENGTH_X_M * 0.5f; // [DERIVED] +20 m.
 inline constexpr float CORE_MIN_Z_M = -PARKING_CORE_WIDTH_Z_M * 0.5f; // [DERIVED] -16 m.
@@ -100,8 +103,8 @@ inline constexpr float ZONE_MIN_Z_M = -ZONE_WIDTH_Z_M * 0.5f; // [DERIVED] -22 m
 inline constexpr float ZONE_MAX_Z_M = ZONE_WIDTH_Z_M * 0.5f; // [DERIVED] +22 m.
 inline constexpr std::array<float, MODULE_COUNT_Z> AISLE_CENTER_Z_M = {
     -PARKING_CORE_WIDTH_Z_M * 0.25f, PARKING_CORE_WIDTH_Z_M * 0.25f
-}; // [DERIVED] Aisle centre positions at -8 m and +8 m.
-inline constexpr float INBOUND_LANE_OFFSET_M = AISLE_W_M * 0.25f; // [DERIVED] Two directional tracks inside each 6 m aisle.
+}; // [DERIVED] Aisle centre positions at -7.75 m and +7.75 m.
+inline constexpr float INBOUND_LANE_OFFSET_M = AISLE_W_M * 0.25f; // [DERIVED] Two directional tracks inside each 5.5 m aisle.
 inline constexpr float ENTRY_LANE_CENTER_Z_M = -RAMP_LANE_W_M * 0.5f; // [DERIVED] Entry lane centre in the paired 7 m ramp.
 inline constexpr float EXIT_LANE_CENTER_Z_M = RAMP_LANE_W_M * 0.5f; // [DERIVED] Exit lane centre in the paired 7 m ramp.
 inline constexpr float RAMP_TOTAL_WIDTH_Z_M = 2.0f * RAMP_LANE_W_M; // [DERIVED] Two separated 3.5 m lanes.
@@ -111,9 +114,10 @@ inline constexpr float RAMP_END_X_M = ZONE_MIN_X_M; // [DERIVED] Ramp meets B1 a
 inline constexpr float RAMP_MID_X_M = (RAMP_START_X_M + RAMP_END_X_M) * 0.5f; // [DERIVED]
 inline constexpr float RAMP_MID_Y_M = (GROUND_LEVEL_Y_M + FLOOR_HEIGHT_B1_M) * 0.5f; // [DERIVED] Midpoint between ground and B1.
 inline const float RAMP_ANGLE_RAD = -std::atan(RAMP_SLOPE); // [DERIVED] Downward from west to east; runtime constant because C++17 std::atan is not constexpr.
-inline constexpr float RAMP_GATE_APPROACH_OFFSET_M = 0.0f; // [ASSUMED] Gate is placed at the foot of the ramp entering B1.
-inline constexpr float ENTRY_GATE_X_M = RAMP_END_X_M; // [DERIVED] Shared entry / exit checkpoint at the bottom of the ramp (meeting B1 slab).
-inline constexpr float CONNECTOR_X_M = ZONE_MIN_X_M + PERIMETER_LANE_W_M * 0.5f; // [DERIVED] Centre of west perimeter lane.
+inline constexpr float GATE_CLUSTER_SETBACK_M = 3.0f; // [ASSUMED] Move the gate assembly inside the basement, clear of the ramp foot.
+inline constexpr float GATE_POST_PASS_STRAIGHT_M = 2.0f; // [ASSUMED] Straight travel distance after the barrier before turning.
+inline constexpr float ENTRY_GATE_X_M = RAMP_END_X_M + GATE_CLUSTER_SETBACK_M; // [DERIVED] Shared gate plane inside B1.
+inline constexpr float CONNECTOR_X_M = ENTRY_GATE_X_M + GATE_POST_PASS_STRAIGHT_M; // [DERIVED] Turn point two metres beyond the gate.
 inline constexpr int COLUMN_GRID_X_COUNT = static_cast<int>(PARKING_CORE_LENGTH_X_M / COLUMN_SPACING_X_M); // [DERIVED] Five full 7.5 m spans.
 inline constexpr float COLUMN_GRID_REMAINDER_X_M = PARKING_CORE_LENGTH_X_M - COLUMN_GRID_X_COUNT * COLUMN_SPACING_X_M; // [DERIVED] 2.5 m final remainder.
 inline constexpr float SCENE_CENTER_X_M = (RAMP_START_X_M + ZONE_MAX_X_M) * 0.5f; // [DERIVED] Camera framing centre.
@@ -193,7 +197,7 @@ inline constexpr float SLOT_COLUMN_CLEARANCE_OFFSET_M = 0.15f; // [ASSUMED] Smal
 inline constexpr float BAY_TURN_STAGING_OFFSET_M = 0.5f; // [ASSUMED] Lateral staging offset before the 90-degree bay maneuver.
 inline constexpr float VEHICLE_SAFETY_GAP_M = 0.35f; // [ASSUMED] Simulation-only separation, not an AEON operating rule.
 inline constexpr float BAY_MARKING_WIDTH_M = 0.05f; // [ASSUMED] Visual marking thickness.
-inline constexpr float MARKING_HEIGHT_M = 0.025f; // [ASSUMED] Visual marking thickness above floor.
+inline constexpr float MARKING_HEIGHT_M = 0.0015f; // [ASSUMED] Painted-on-floor marking thickness (nearly flat, inset/flush look).
 inline constexpr float ARROW_LENGTH_M = STALL_W_M; // [DERIVED] Arrow graphic scales from stall width.
 inline constexpr float ARROW_STROKE_M = 0.12f; // [ASSUMED] Visual arrow stroke width.
 inline constexpr float BARRIER_POST_SIZE_M = 0.22f; // [ASSUMED] Simplified prop size.
@@ -261,7 +265,7 @@ inline constexpr float LIGHT_FIXTURE_THICKNESS_M = 0.08f; // [ASSUMED] Decorativ
 
 
 // ------------------------------- Additional representative facilities [ASSUMED]
-// Auxiliary facilities are drawn beside (not inside) the 52 x 44 m Zone A core.
+// Auxiliary facilities are drawn beside (not inside) the 52 x 43 m Zone A core.
 // They are demonstration geometry only; AEON's detailed locations/counts were not public.
 inline constexpr float BIKE_STALL_W_M = 0.85f; // [ASSUMED] Demonstration motorbike-space width.
 inline constexpr float BIKE_STALL_L_M = 2.0f; // [ASSUMED] Demonstration motorbike-space length.
@@ -424,7 +428,7 @@ inline constexpr float MANUAL_TURN_SPEED_RAD_S = 1.55f; // [ASSUMED] User-contro
 inline constexpr float PARKING_DWELL_MIN_SECONDS = 90.0f; // [ASSUMED] Random demo dwell lower bound, not a real customer stay.
 inline constexpr float PARKING_DWELL_MAX_SECONDS = 120.0f; // [ASSUMED] Random demo dwell upper bound, not a real customer stay.
 inline constexpr float SPAWN_INTERVAL_SECONDS = 1.5f; // [ASSUMED] Demo arrival interval; supports FULL-state demonstration.
-inline constexpr int MAX_ACTIVE_AUTO_VEHICLES = TOTAL_ZONE_A_CAR_SLOTS; // [DERIVED] Cannot exceed the 64 simulated car spaces.
+inline constexpr int MAX_ACTIVE_AUTO_VEHICLES = 2; // [DEBUG] Limit traffic to 2 cars while fixing the basement routing.
 inline constexpr float ENTRY_GATE_PREOPEN_SECONDS = 0.35f; // [ASSUMED] Animation delay.
 inline constexpr float EXIT_PAYMENT_WAIT_SECONDS = 2.0f; // [ASSUMED] Demo wait to represent assisted mobile payment; no payment transaction is processed.
 inline constexpr float BARRIER_OPEN_DURATION_SECONDS = 4.0f; // [ASSUMED] Animation duration.
@@ -513,6 +517,9 @@ constexpr float vehicleBayCenterX(int slotIndex) {
 constexpr float slotCenterZ(float aisleCenterZ, int rowSide) {
     return aisleCenterZ + static_cast<float>(rowSide) * (AISLE_W_M * 0.5f + STALL_L_M * 0.5f);
 }
+constexpr bool isEntryConnectorClearanceSlot(float aisleCenterZ, int rowSide, int slotIndex) {
+    return slotIndex == 0 && aisleCenterZ * static_cast<float>(rowSide) < 0.0f;
+}
 constexpr float inboundTrackZ(float aisleCenterZ) {
     return aisleCenterZ - INBOUND_LANE_OFFSET_M;
 }
@@ -540,7 +547,7 @@ constexpr float motorbikeSlotZ(int rowIndex) {
          (static_cast<float>(BIKE_ROW_COUNT) - 1.0f) * 0.5f) * rowPitch;
 }
 
-static_assert(TOTAL_ZONE_A_CAR_SLOTS == 64, "Zone A must contain 64 car spaces.");
+static_assert(TOTAL_ZONE_A_CAR_SLOTS == 62, "Zone A must retain a clear two-metre gate connector.");
 static_assert(COLUMN_SPACING_X_M == 7.5f, "Column spacing must remain 7.5 m.");
 static_assert(BASEMENT_FLOORS == 2, "The complex has two basement levels.");
 static_assert(TOTAL_ZONE_A_BIKE_SLOTS == 24, "Motorbike demo area must contain 24 sample spaces.");

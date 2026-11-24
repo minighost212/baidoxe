@@ -10,38 +10,40 @@
   <text class="sub" x="42" y="76">Illustrative layout only • 1 unit = 1 m • coordinates and dimensions marked [ASSUMED] are not site measurements</text>
   <rect class="panel" x="28" y="105" width="1144" height="670" rx="14"/>
 
-  <!-- Main car-zone boundary: 52 x 44 m; scale 9 px/m -->
-  <rect class="zone" x="400" y="270" width="468" height="396" rx="4"/>
-  <text class="label" x="410" y="292">ZONE A CAR AREA – 52 × 44 m</text>
+  <!-- Main car-zone boundary: 52 x 43 m; scale 9 px/m -->
+  <rect class="zone" x="400" y="270" width="468" height="387" rx="4"/>
+  <text class="label" x="410" y="292">ZONE A CAR AREA – 52 × 43 m</text>
   <text class="small" x="410" y="312">Perimeter circulation lane: 6 m each side</text>
 
-  <!-- 40 x 32 m parking core -->
-  <rect class="core" x="454" y="324" width="360" height="288"/>
-  <text class="small" x="464" y="342">Parking core 40 × 32 m</text>
+  <!-- 40 x 31 m parking core -->
+  <rect class="core" x="454" y="324" width="360" height="279"/>
+  <text class="small" x="464" y="342">Parking core 40 × 31 m</text>
 
-  <!-- Four rows and two 6 m aisles; 16 stalls each -->
-  <rect class="aisle" x="454" y="369" width="360" height="54"/>
-  <rect class="aisle" x="454" y="513" width="360" height="54"/>
-  <text class="tiny" x="610" y="400">AISLE 6 m</text>
-  <text class="tiny" x="610" y="544">AISLE 6 m</text>
+  <!-- Four rows and two 5.5 m aisles; two inner connector stalls omitted -->
+  <rect class="aisle" x="454" y="369" width="360" height="49.5"/>
+  <rect class="aisle" x="454" y="508.5" width="360" height="49.5"/>
+  <text class="tiny" x="610" y="397">AISLE 5.5 m</text>
+  <text class="tiny" x="610" y="536">AISLE 5.5 m</text>
   <g id="stalls" fill="none" stroke="#c8d5dc" stroke-width="1">
     <!-- Row A -->
     <rect class="stall" x="454" y="324" width="360" height="45"/>
     <path d="M476.5 324V369 M499 324V369 M521.5 324V369 M544 324V369 M566.5 324V369 M589 324V369 M611.5 324V369 M634 324V369 M656.5 324V369 M679 324V369 M701.5 324V369 M724 324V369 M746.5 324V369 M769 324V369 M791.5 324V369"/>
     <!-- Row B -->
-    <rect class="stall" x="454" y="423" width="360" height="45"/>
-    <path d="M476.5 423V468 M499 423V468 M521.5 423V468 M544 423V468 M566.5 423V468 M589 423V468 M611.5 423V468 M634 423V468 M656.5 423V468 M679 423V468 M701.5 423V468 M724 423V468 M746.5 423V468 M769 423V468 M791.5 423V468"/>
+    <rect class="stall" x="454" y="418.5" width="360" height="45"/>
+    <path d="M476.5 418.5V463.5 M499 418.5V463.5 M521.5 418.5V463.5 M544 418.5V463.5 M566.5 418.5V463.5 M589 418.5V463.5 M611.5 418.5V463.5 M634 418.5V463.5 M656.5 418.5V463.5 M679 418.5V463.5 M701.5 418.5V463.5 M724 418.5V463.5 M746.5 418.5V463.5 M769 418.5V463.5 M791.5 418.5V463.5"/>
     <!-- Row C -->
-    <rect class="stall" x="454" y="468" width="360" height="45"/>
-    <path d="M476.5 468V513 M499 468V513 M521.5 468V513 M544 468V513 M566.5 468V513 M589 468V513 M611.5 468V513 M634 468V513 M656.5 468V513 M679 468V513 M701.5 468V513 M724 468V513 M746.5 468V513 M769 468V513 M791.5 468V513"/>
+    <rect class="stall" x="454" y="463.5" width="360" height="45"/>
+    <path d="M476.5 463.5V508.5 M499 463.5V508.5 M521.5 463.5V508.5 M544 463.5V508.5 M566.5 463.5V508.5 M589 463.5V508.5 M611.5 463.5V508.5 M634 463.5V508.5 M656.5 463.5V508.5 M679 463.5V508.5 M701.5 463.5V508.5 M724 463.5V508.5 M746.5 463.5V508.5 M769 463.5V508.5 M791.5 463.5V508.5"/>
     <!-- Row D -->
-    <rect class="stall" x="454" y="567" width="360" height="45"/>
-    <path d="M476.5 567V612 M499 567V612 M521.5 567V612 M544 567V612 M566.5 567V612 M589 567V612 M611.5 567V612 M634 567V612 M656.5 567V612 M679 567V612 M701.5 567V612 M724 567V612 M746.5 567V612 M769 567V612 M791.5 567V612"/>
+    <rect class="stall" x="454" y="558" width="360" height="45"/>
+    <path d="M476.5 558V603 M499 558V603 M521.5 558V603 M544 558V603 M566.5 558V603 M589 558V603 M611.5 558V603 M634 558V603 M656.5 558V603 M679 558V603 M701.5 558V603 M724 558V603 M746.5 558V603 M769 558V603 M791.5 558V603"/>
+    <rect class="aisle" x="454" y="418.5" width="22.5" height="45"/>
+    <rect class="aisle" x="454" y="463.5" width="22.5" height="45"/>
   </g>
   <text class="tiny" x="470" y="360">16 CAR STALLS</text>
-  <text class="tiny" x="470" y="459">16 CAR STALLS</text>
-  <text class="tiny" x="470" y="504">16 CAR STALLS</text>
-  <text class="tiny" x="470" y="603">16 CAR STALLS</text>
+  <text class="tiny" x="480" y="454">15 CAR STALLS</text>
+  <text class="tiny" x="480" y="499">15 CAR STALLS</text>
+  <text class="tiny" x="470" y="594">16 CAR STALLS</text>
 
   <!-- Five complete column spans at 7.5m pitch, two aisle edges each aisle -->
   <g class="column">
@@ -54,8 +56,10 @@
   <text class="tiny" x="820" y="388">(last remainder 2.5 m)</text>
 
   <!-- Ramp west side, 2 lanes -->
-  <rect class="ramp" x="137" y="436.5" width="263" height="63" rx="3"/>
-  <path d="M137 468H400" stroke="#f2cf69" stroke-width="2" stroke-dasharray="10 8"/>
+  <rect class="ramp" x="137" y="432" width="263" height="63" rx="3"/>
+  <path d="M137 463.5H400" stroke="#f2cf69" stroke-width="2" stroke-dasharray="10 8"/>
+  <path d="M427 432V495" stroke="#e85c55" stroke-width="4"/>
+  <path class="arrow" d="M427 463.5H445 M445 463.5V440 M445 463.5V487"/>
   <path class="arrow" d="M185 452H350"/>
   <path class="arrow" d="M350 484H185"/>
   <text class="label" x="150" y="424">PAIRED RAMP</text>
@@ -88,7 +92,7 @@
   <!-- Legend and caveat -->
   <g transform="translate(60 625)">
     <text class="label" x="0" y="0">MODEL SCOPE</text>
-    <rect class="stall" x="0" y="18" width="20" height="13"/><text class="small" x="30" y="29">Car stalls (4 rows × 16 = 64)</text>
+    <rect class="stall" x="0" y="18" width="20" height="13"/><text class="small" x="30" y="29">Car stalls (64 planned - 2 connector bays = 62)</text>
     <rect class="bike" x="0" y="42" width="20" height="13"/><text class="small" x="30" y="53">Motorbike sample annex (24)</text>
     <rect class="lift" x="0" y="66" width="20" height="13"/><text class="small" x="30" y="77">Elevator core (2 static shafts)</text>
   </g>

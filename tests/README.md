@@ -10,11 +10,11 @@ ctest --test-dir build-tests -C Release --output-on-failure
 
 The single CTest executable contains several deterministic scenarios:
 
-1. Generate all 64 car stalls, the column grid and the 24 illustrative motorbike bays; fill and release motorbike capacity.
+1. Generate 62 car stalls with connector-clearance bays omitted, the column grid and the 24 illustrative motorbike bays; fill and release motorbike capacity.
 2. Create independent B1 and B2 worlds; check B1-to-B2 ramp elevation and drive a car down the ramp into a B2 stall.
 3. Check the motorbike annex and elevator-core envelopes, shaft bounds and access dimensions.
-4. Run five cars through entry/exit connectors, entry and exit barriers, payment queue and parking states while checking car/car and car/column overlap.
-5. Sustain automatic arrivals until the 64-slot sample zone reaches `FULL`; check both aisles, both row sides, staging, reverse parking and rejection of another incoming car. This scenario repeats with three fixed random seeds.
+4. Check the three-metre gate setback, two-metre straight lead-in and aisle turn, then run five cars through entry/exit connectors, separate barriers, payment queue and parking states while checking car/car and car/column overlap.
+5. Sustain automatic arrivals until the 62-slot sample zone reaches `FULL`; check both aisles, both row sides, staging, reverse parking and rejection of another incoming car. This scenario repeats with three fixed random seeds.
 
 The same test source was also compiled with AddressSanitizer and UndefinedBehaviorSanitizer; both passed in the development environment.
 

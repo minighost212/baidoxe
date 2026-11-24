@@ -10,9 +10,9 @@
 
 GuardStation::GuardStation(Renderer& renderer)
     : renderer_(renderer),
-      center_(glm::vec3(AeonLayout::ZONE_MIN_X_M + 1.20f, 0.0f, 0.0f)),
-      entryBarrierX_(AeonLayout::ZONE_MIN_X_M + 0.0f),  // -26.0m: right at ramp foot
-      exitBarrierX_(AeonLayout::ZONE_MIN_X_M + 2.40f)   // -23.6m: inner checkpoint
+      center_(glm::vec3(AeonLayout::ENTRY_GATE_X_M - 1.30f, 0.0f, 0.0f)),
+      entryBarrierX_(AeonLayout::ENTRY_GATE_X_M),
+      exitBarrierX_(AeonLayout::ENTRY_GATE_X_M)
 {
 }
 
@@ -337,29 +337,41 @@ void GuardStation::drawOverheadCameras(float floorY) const {
 
 void GuardStation::drawLaneDirectionArrows(float floorY) const {
     const glm::vec3 arrowYellow(0.96f, 0.78f, 0.05f);
-    const float y = floorY + AeonLayout::MARKING_HEIGHT_M;
+    const float y = floorY + 0.0002f;
 
-    // Arrow on Inbound lane: points INTO the basement (+X direction)
-    const float inX = entryBarrierX_ + 1.80f;
+    // Keep the two-metre post-gate lead-in visibly straight before the fork.
+    const float inX = entryBarrierX_ + AeonLayout::GATE_POST_PASS_STRAIGHT_M * 0.5f;
     const float inZ = AeonLayout::ENTRY_LANE_CENTER_Z_M;
-    renderer_.drawBox(glm::vec3(inX, y, inZ),
-                      glm::vec3(1.40f, AeonLayout::MARKING_HEIGHT_M, 0.22f), arrowYellow);
-    renderer_.drawOrientedBox(glm::vec3(inX + 0.70f, y, inZ - 0.18f),
-                              glm::vec3(0.50f, AeonLayout::MARKING_HEIGHT_M, 0.18f),
-                              -0.55f, arrowYellow);
-    renderer_.drawOrientedBox(glm::vec3(inX + 0.70f, y, inZ + 0.18f),
-                              glm::vec3(0.50f, AeonLayout::MARKING_HEIGHT_M, 0.18f),
-                              0.55f, arrowYellow);
+    renderer_.drawFlatXZ(glm::vec3(inX, y, inZ),
+                         glm::vec2(1.40f, 0.22f), arrowYellow);
+    renderer_.drawFlatXZRotated(glm::vec3(inX + 0.70f, y, inZ - 0.18f),
+                                glm::vec2(0.50f, 0.18f), -0.55f, arrowYellow);
+    renderer_.drawFlatXZRotated(glm::vec3(inX + 0.70f, y, inZ + 0.18f),
+                                glm::vec2(0.50f, 0.18f), 0.55f, arrowYellow);
 
-    // Arrow on Outbound lane: points UP THE RAMP (-X direction)
-    const float outX = exitBarrierX_ - 1.80f;
+    auto drawZArrow = [&](float z, float direction) {
+        renderer_.drawFlatXZ(glm::vec3(AeonLayout::CONNECTOR_X_M, y, z),
+                             glm::vec2(0.18f, 1.05f), arrowYellow);
+        for (int side : {-1, 1}) {
+            renderer_.drawFlatXZRotated(
+                glm::vec3(AeonLayout::CONNECTOR_X_M + static_cast<float>(side) * 0.18f,
+                          y, z + direction * 0.62f),
+                glm::vec2(0.48f, 0.16f),
+                static_cast<float>(side) * 0.62f, arrowYellow);
+        }
+    };
+
+    // At the junction, mark both choices toward the two parking aisles.
+    drawZArrow(-3.50f, -1.0f);
+    drawZArrow(0.00f, 1.0f);
+
+    // Arrow on the separate outbound lane: points toward the ramp (-X).
+    const float outX = exitBarrierX_ - 1.20f;
     const float outZ = AeonLayout::EXIT_LANE_CENTER_Z_M;
-    renderer_.drawBox(glm::vec3(outX, y, outZ),
-                      glm::vec3(1.40f, AeonLayout::MARKING_HEIGHT_M, 0.22f), arrowYellow);
-    renderer_.drawOrientedBox(glm::vec3(outX - 0.70f, y, outZ - 0.18f),
-                              glm::vec3(0.50f, AeonLayout::MARKING_HEIGHT_M, 0.18f),
-                              0.55f, arrowYellow);
-    renderer_.drawOrientedBox(glm::vec3(outX - 0.70f, y, outZ + 0.18f),
-                              glm::vec3(0.50f, AeonLayout::MARKING_HEIGHT_M, 0.18f),
-                              -0.55f, arrowYellow);
+    renderer_.drawFlatXZ(glm::vec3(outX, y, outZ),
+                         glm::vec2(1.40f, 0.22f), arrowYellow);
+    renderer_.drawFlatXZRotated(glm::vec3(outX - 0.70f, y, outZ - 0.18f),
+                                glm::vec2(0.50f, 0.18f), 0.55f, arrowYellow);
+    renderer_.drawFlatXZRotated(glm::vec3(outX - 0.70f, y, outZ + 0.18f),
+                                glm::vec2(0.50f, 0.18f), -0.55f, arrowYellow);
 }

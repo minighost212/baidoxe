@@ -16,7 +16,24 @@ void testLayoutAndMotorbikeCapacity() {
     ParkingWorld b1(AeonLayout::FLOOR_HEIGHT_B1_M, AeonLayout::FLOOR_INDEX_B1, 101u);
     b1.initialise();
     require(static_cast<int>(b1.slots().size()) == AeonLayout::TOTAL_ZONE_A_CAR_SLOTS,
-            "B1 must generate all 64 car stalls");
+            "B1 must generate the configured car stalls");
+    require(AeonLayout::TOTAL_ZONE_A_CAR_SLOTS == 62,
+            "The two gate-connector clearance stalls must not be counted as parking");
+    require(std::abs(AeonLayout::AISLE_W_M - 5.5f) < 0.001f,
+            "The main car aisles must be 5.5 m wide");
+    require(std::abs(AeonLayout::ENTRY_GATE_X_M -
+                     (AeonLayout::RAMP_END_X_M + 3.0f)) < 0.001f,
+            "The gate assembly must be set back from the ramp foot");
+    require(std::abs(AeonLayout::CONNECTOR_X_M -
+                     (AeonLayout::ENTRY_GATE_X_M + 2.0f)) < 0.001f,
+            "The turn connector must be two metres beyond the barrier");
+    for (const ParkingSlot& slot : b1.slots()) {
+        const bool removedFrontStall =
+            std::abs(slot.center().x - AeonLayout::vehicleBayCenterX(0)) < 0.001f &&
+            slot.aisleZ() * static_cast<float>(slot.rowSide()) < 0.0f;
+        require(!removedFrontStall,
+                "A parking stall remains in the direct entry/exit connector");
+    }
     require(static_cast<int>(b1.columns().size()) == 20,
             "B1 must generate the expected 20 columns");
     require(static_cast<int>(b1.motorbikeSlots().size()) == AeonLayout::TOTAL_ZONE_A_BIKE_SLOTS,
@@ -151,6 +168,49 @@ void testAnnexAndElevatorGeometryBounds() {
             "Assumed stall offset must leave the model car envelope clear of a column");
 }
 
+void testGateConnectorRouting() {
+    ParkingWorld world(AeonLayout::FLOOR_HEIGHT_B1_M, AeonLayout::FLOOR_INDEX_B1, 252u);
+    world.initialise();
+    require(world.spawnVehicle(), "Could not spawn gate-connector test vehicle");
+
+    bool reachedBarrier = false;
+    bool reachedTurnPoint = false;
+    bool completedTurnIntoAisle = false;
+    for (int frame = 0; frame < 1500 && !completedTurnIntoAisle; ++frame) {
+        world.update(0.04f);
+        for (const Vehicle& vehicle : world.vehicles()) {
+            const ParkingSlot& slot = world.slots()[static_cast<std::size_t>(vehicle.slotIndex())];
+            if (vehicle.phase() == Vehicle::Phase::EntryGateWait) {
+                reachedBarrier = true;
+                require(std::abs(vehicle.position().x - AeonLayout::ENTRY_GATE_X_M) <=
+                            AeonLayout::ROUTE_ARRIVAL_EPSILON_M,
+                        "The entry connector must start at the barrier (vehicle x=" +
+                            std::to_string(vehicle.position().x) + ", gate x=" +
+                            std::to_string(AeonLayout::ENTRY_GATE_X_M) + ")");
+                require(std::abs(vehicle.position().z - AeonLayout::ENTRY_LANE_CENTER_Z_M) < 0.001f,
+                        "The vehicle must remain in the dedicated entry lane at the barrier");
+            }
+            if (vehicle.phase() == Vehicle::Phase::ToTargetAisle) {
+                reachedTurnPoint = true;
+                require(std::abs(vehicle.position().x - AeonLayout::CONNECTOR_X_M) < 0.001f,
+                        "The vehicle must travel exactly two metres before turning (vehicle x=" +
+                            std::to_string(vehicle.position().x) + ", turn x=" +
+                            std::to_string(AeonLayout::CONNECTOR_X_M) + ")");
+            }
+            if (vehicle.phase() == Vehicle::Phase::ToBayApproach) {
+                completedTurnIntoAisle = true;
+                require(std::abs(vehicle.position().x - AeonLayout::CONNECTOR_X_M) < 0.001f,
+                        "The vehicle must finish its turn inside the connector");
+                require(std::abs(vehicle.position().z -
+                                 AeonLayout::inboundTrackZ(slot.aisleZ())) < 0.001f,
+                        "The vehicle must merge into its aisle's inbound track");
+            }
+        }
+    }
+    require(reachedBarrier && reachedTurnPoint && completedTurnIntoAisle,
+            "The vehicle did not follow the barrier, straight lead-in, and aisle turn sequence");
+}
+
 void testSafeMultiVehicleTrafficAndBarriers() {
     ParkingWorld world(AeonLayout::FLOOR_HEIGHT_B1_M, AeonLayout::FLOOR_INDEX_B1, 303u);
     world.initialise();
@@ -208,7 +268,7 @@ void testIntersectionCoverageAndFullState(std::uint32_t seed) {
     bool fullSeen = false;
 
     // Keep automatic arrivals enabled; this drives both aisles, both row sides,
-    // turning/staging, reverse parking, barrier flow, and the 64-space FULL state.
+    // turning/staging, reverse parking, barrier flow, and the configured FULL state.
     for (int frame = 0; frame < 5000; ++frame) {
         world.update(0.04f);
         world.updateSpawning(0.04f);
@@ -250,7 +310,7 @@ void testIntersectionCoverageAndFullState(std::uint32_t seed) {
     require(sawStagingManeuver, "No vehicle reached the staging point before turning into a bay");
     require(sawReverseIntoBay, "No vehicle exercised reverse parking");
     require(sawOccupiedState, "No vehicle reached OCCUPIED state during sustained traffic");
-    require(fullSeen, "The 64-space Zone A simulation did not reach FULL under sustained arrivals");
+    require(fullSeen, "The Zone A simulation did not reach FULL under sustained arrivals");
 }
 }
 
@@ -259,6 +319,7 @@ int main() {
         testLayoutAndMotorbikeCapacity();
         testB2GeometryAndIndependentWorld();
         testAnnexAndElevatorGeometryBounds();
+        testGateConnectorRouting();
         testSafeMultiVehicleTrafficAndBarriers();
         // Repeat the sustained-arrival / two-aisle / barrier / FULL scenario
         // under fixed seeds to make the regression test reproducible.

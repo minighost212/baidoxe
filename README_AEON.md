@@ -9,7 +9,8 @@ The project models a representative assumed parking zone for AEON MALL Đà Nẵ
 - Generated car bays, column locations, traffic tracks, ramp geometry, motorbike bays and elevator geometry from the shared layout constants and helper functions.
 - Added a 24-space illustrative motorbike annex on each simulated floor, with 8 static demo motorbikes initially parked. Press `B` to add and `X` to remove one.
 - Added a two-shaft illustrative elevator/lift core and access walkway. This is a static architectural representation only; no lift car, door animation or vertical passenger simulation is implemented.
-- Added a separate B2 simulation world at the assumed elevation `-7.0 m`. Its ramp starts at the assumed B1 elevation `-3.5 m` and descends to B2. B2 has its own independent 64-space sample inventory and demo motorbike annex; this does **not** mean the real site has 128 spaces in this arrangement.
+- Added a separate B2 simulation world at the assumed elevation `-7.0 m`. Its ramp starts at the assumed B1 elevation `-3.5 m` and descends to B2. B2 has its own independent 62-space sample inventory and demo motorbike annex; this does **not** mean the real site has 124 spaces in this arrangement.
+- Set both barriers 3 m beyond the ramp foot, added a clear 2 m straight lead-in before the aisle turn, reduced the main aisles to 5.5 m, and removed the two stalls that blocked the entry/exit connector.
 - Added CTest coverage for generated layout, motorbike capacity, B2 ramp/parking, elevator geometry bounds, multiple vehicles, route connectors, entry/exit barriers, payment queue, collision checks, two aisle directions, reverse parking and the `FULL` state.
 - Made the traffic regression test deterministic by accepting an optional random seed in `ParkingWorld`.
 - Fixed the last bitmap-font row index so glyph geometry derives from the shared glyph dimensions rather than a separate literal.
@@ -41,17 +42,18 @@ The supplied data describes the whole TTC Plaza complex: nearly 15,000 m² land 
 
 ### Derived values `[DERIVED]`
 
-The 23,000 m² parking area divided by two basements gives an average 11,500 m² per basement for scale context only. The car-to-motorbike capacity ratio is approximately 1:4.2. Zone A's 64 sample car spaces are about 14.9% of the approximate whole-complex 430-car capacity.
+The 23,000 m² parking area divided by two basements gives an average 11,500 m² per basement for scale context only. The car-to-motorbike capacity ratio is approximately 1:4.2. Zone A's 62 sample car spaces are about 14.4% of the approximate whole-complex 430-car capacity.
 
 ### Assumed design `[ASSUMED]`
 
-- Car parking core: 40 × 32 m; four rows of 16 perpendicular stalls; 64 car spaces per simulated floor.
-- Perimeter lanes: 6 m; representative Zone A car layout envelope: 52 × 44 m.
-- Car stall: 2.5 × 5.0 m; aisle: 6.0 m; column section: 0.6 × 0.6 m; column pitch: 7.5 m.
+- Car parking core: 40 × 31 m; four rows of 16 perpendicular stalls, with two connector-clearance stalls omitted; 62 car spaces per simulated floor.
+- Perimeter lanes: 6 m; representative Zone A car layout envelope: 52 × 43 m.
+- Car stall: 2.5 × 5.0 m; main aisle: 5.5 m; column section: 0.6 × 0.6 m; column pitch: 7.5 m.
+- Separate entry and exit lanes use their own barrier at `X=-23 m`; cars turn into the parking aisles at `X=-21 m`, 2 m after passing the barrier.
 - B1 level: -3.5 m; B2 level: -7.0 m; clear height: 3.0 m.
 - Ramp slope: 12%; paired lanes: 3.5 m each.
 - The B2 ramp is a separate B1-to-B2 link using the same assumed 3.5 m level drop and 12% reference slope.
-- Motorbike annex: two rows of 12 sample spaces (24 total per floor); each bay 0.85 × 2.0 m. This annex is outside the 52 × 44 m car-zone footprint and is not a measured AEON motorcycle area.
+- Motorbike annex: two rows of 12 sample spaces (24 total per floor); each bay 0.85 × 2.0 m. This annex is outside the 52 × 43 m car-zone footprint and is not a measured AEON motorcycle area.
 - Elevator core: two illustrative shafts, lobby and walkway. Its location and dimensions are assumed.
 - 90–120 seconds dwell, 1.5-second automatic spawn interval, vehicle speeds, queue timing and barrier timing are demo settings, not real AEON operating data.
 
@@ -111,7 +113,7 @@ ctest --test-dir build-tests -C Release --output-on-failure
 
 The tests check:
 
-1. 64 generated car bays, expected column count and motorbike-bay capacity.
+1. 62 generated car bays, expected column count and motorbike-bay capacity.
 2. Separate B1/B2 world state, B1-to-B2 ramp elevation and a B2 car completing the parking path.
 3. Motorbike-annex and elevator-shaft geometry bounds.
 4. Five-car traffic, vehicle/column collision checks, entry barrier, exit barrier, payment queue and connector paths.
@@ -120,7 +122,7 @@ The tests check:
 ## 7. Important limitations
 
 1. No official B1/B2 floor plan or on-site measurements were provided. All basement, gate, ramp, column, motorbike-annex and elevator-core dimensions/locations remain `[ASSUMED]` unless marked otherwise in `aeon_layout.h`.
-2. Zone A's 64 car spaces are a representative sample. B1 and B2 each use an independent demo world with the same sample layout; this is a visualization choice and is not a claim about the site's real distribution of 430 spaces.
+2. Zone A's 62 car spaces are a representative sample. B1 and B2 each use an independent demo world with the same sample layout; this is a visualization choice and is not a claim about the site's real distribution of 430 spaces.
 3. The motorbike models are static parked props. They can be added/removed for display, but motorbike arrival routes, movement, collision avoidance and dwell/exit logic are not implemented.
 4. The elevator core is static geometry (two shafts, doors, lobby and access walkway). Elevator cars, opening/closing doors, vertical travel and passenger logic are not implemented.
 5. The B2 route uses an assumed ramp from B1 to B2; exact real-world slope, alignment, gates and one-way/ two-way operation are unknown.

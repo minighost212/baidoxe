@@ -1,0 +1,12 @@
+﻿build*/
+*.exe
+*.obj
+*.o
+*.a
+*.tlog
+*.recipe
+*.vcxproj
+*.vcxproj.filters
+*.sln
+*.slnx
+.vs/

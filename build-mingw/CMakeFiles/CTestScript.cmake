@@ -2,14 +2,14 @@
 # If you choose not to use CMake, this file may be hand configured, by
 # filling in the required variables.
 
-cmake_minimum_required(VERSION 4.4.3)
+cmake_minimum_required(VERSION 4.5.0)
 
 # CTest Start Step
 set(CTEST_SOURCE_DIRECTORY "D:/Dohoa/DHMT2/DHMT2/DHMT")
 set(CTEST_BINARY_DIRECTORY "D:/Dohoa/DHMT2/DHMT2/DHMT/build-mingw")
 
 # CTest Update Step
-set(CTEST_UPDATE_COMMAND "")
+set(CTEST_UPDATE_COMMAND "C:/Program Files/Git/cmd/git.exe")
 set(CTEST_UPDATE_OPTIONS "")
 set(CTEST_UPDATE_VERSION_ONLY "")
 set(CTEST_NIGHTLY_START_TIME "00:00:00 EDT")
@@ -24,7 +24,7 @@ set(CTEST_SVN_OPTIONS "")
 set(CTEST_SVN_UPDATE_OPTIONS "")
 
 # Git options
-set(CTEST_GIT_COMMAND "")
+set(CTEST_GIT_COMMAND "C:/Program Files/Git/cmd/git.exe")
 set(CTEST_GIT_INIT_SUBMODULES "")
 set(CTEST_GIT_UPDATE_CUSTOM "")
 set(CTEST_GIT_UPDATE_OPTIONS "")

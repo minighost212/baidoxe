@@ -56,8 +56,9 @@ class Vehicle {
 public:
     enum class Phase {
         EnteringRamp, EntryGateWait, ToEntryConnector, ToTargetAisle, ToBayApproach,
-        ToBayStaging, ReversingIntoBay, Parked, LeavingBay, AligningOutboundLane, ToExitConnector,
-        ToExitLane, ExitGateApproach, ExitPaymentWait, ExitingRamp
+        ToBayMouth, ToBayStaging, ReversingIntoBay, Parked, LeavingBay,
+        AligningOutboundLane, ToExitConnector, ToExitLane, ExitGateApproach,
+        ExitPaymentWait, ExitingRamp
     };
 
     Vehicle(int id, const glm::vec3& spawnPosition, int slotIndex)
@@ -328,6 +329,7 @@ inline void ParkingWorld::initialise() {
             const float facingAisleYaw =
                 rowSide > 0 ? AeonLayout::PI * AeonLayout::GEOMETRY_HALF_RATIO : -AeonLayout::PI * AeonLayout::GEOMETRY_HALF_RATIO;
             for (int slotIndex = 0; slotIndex < AeonLayout::STALLS_PER_ROW; ++slotIndex) {
+                if (AeonLayout::isEntryConnectorClearanceSlot(aisleZ, rowSide, slotIndex)) continue;
                 slots_.emplace_back(
                     glm::vec3(AeonLayout::vehicleBayCenterX(slotIndex), floorY_, rowZ),
                     aisleZ, rowSide, facingAisleYaw);
@@ -349,7 +351,7 @@ inline void ParkingWorld::initialise() {
     }
 
     // Separate 24-space motorbike demo bay. This annex is an explicit design
-    // assumption, outside the 52 x 44 m car Zone A footprint.
+    // assumption, outside the 52 x 43 m car Zone A footprint.
     for (int row = 0; row < AeonLayout::BIKE_ROW_COUNT; ++row) {
         for (int index = 0; index < AeonLayout::BIKE_STALLS_PER_ROW; ++index) {
             motorbikeSlotCenters_.emplace_back(
@@ -546,8 +548,11 @@ inline bool ParkingWorld::hasInboundManeuverOnAisle(const Vehicle& departing) co
             other.slotIndex_ >= static_cast<int>(slots_.size())) continue;
         if (std::abs(slots_[static_cast<std::size_t>(other.slotIndex_)].aisleZ() - aisleZ) >
             AeonLayout::ROUTE_ARRIVAL_EPSILON_M) continue;
-        if (other.phase_ == Vehicle::Phase::ToBayApproach ||
-            other.phase_ == Vehicle::Phase::ToBayStaging ||
+        // Only block the departure when an inbound vehicle is actively turning
+        // into or occupying the bay mouth (ToBayStaging / ReversingIntoBay).
+        // Vehicles merely driving down the aisle (ToBayApproach / ToBayMouth)
+        // do not occupy the bay mouth, so waiting for them deadlocks the aisle.
+        if (other.phase_ == Vehicle::Phase::ToBayStaging ||
             other.phase_ == Vehicle::Phase::ReversingIntoBay) return true;
     }
     return false;
@@ -600,10 +605,16 @@ inline bool ParkingWorld::moveToward(Vehicle& vehicle, const glm::vec3& target, 
     const float targetYaw = std::atan2(-direction.y, direction.x);
     const float candidateYaw = reverse ? vehicle.yaw_ : targetYaw;
     const float step = std::min(speed * dt, distance);
+    const bool arrived = distance <= step + AeonLayout::ROUTE_ARRIVAL_EPSILON_M;
     glm::vec3 candidate = vehicle.position_;
-    candidate.x += direction.x * step;
-    candidate.z += direction.y * step;
-    candidate.y = followRamp ? AeonLayout::rampYAtX(candidate.x, upperFloorY_, floorY_) : floorY_;
+    if (arrived) {
+        candidate = target;
+    } else {
+        candidate.x += direction.x * step;
+        candidate.z += direction.y * step;
+    }
+    candidate.y = followRamp ? AeonLayout::rampYAtX(candidate.x, upperFloorY_, floorY_)
+                             : target.y;
 
     if (isBlockedByTraffic(vehicle.id_, candidate, candidateYaw) ||
         isBlockedByStaticObjects(candidate, candidateYaw)) {
@@ -612,7 +623,7 @@ inline bool ParkingWorld::moveToward(Vehicle& vehicle, const glm::vec3& target, 
 
     vehicle.position_ = candidate;
     if (!reverse) vehicle.yaw_ = targetYaw;
-    return distance <= step + AeonLayout::ROUTE_ARRIVAL_EPSILON_M;
+    return arrived;
 }
 
 // ------------------------------------------------------------- state machine
@@ -621,28 +632,31 @@ inline void ParkingWorld::updateVehicle(Vehicle& vehicle, float dt) {
     const float floorY = floorY_;
 
     // -----------------------------------------------------------------------
-    // Luồng xe thực tế tầng hầm:
-    //  Xe vào từ dốc (W) → đi thẳng ĐÔNG dọc inbound lane (Z=-1.75m) →
-    //  đến vị trí X của lô → quẹo 90° vào lô (head-in, tiến vào đầu xe).
-    //  Khi ra: lùi ra làn outbound (Z=+1.75m) → đi Tây → ra cổng → lên dốc.
+    // Luồng xe vào: qua cổng, đi thẳng 2 m, rẽ vào làn inbound của aisle,
+    // sau đó tiến vào ô đỗ. Luồng ra quay về connector qua làn outbound riêng.
     // -----------------------------------------------------------------------
 
     const glm::vec3 entryGateTarget(AeonLayout::ENTRY_GATE_X_M,
                                     AeonLayout::rampYAtX(AeonLayout::ENTRY_GATE_X_M, upperFloorY_, floorY_),
                                     AeonLayout::ENTRY_LANE_CENTER_Z_M);
 
-    // Điểm xe vào bên trong hầm (sau barem) - vẫn trên inbound lane
+    // Điểm rẽ nằm đúng 2 m sau barie.
     const glm::vec3 connectorEntryTarget(AeonLayout::CONNECTOR_X_M, floorY,
                                          AeonLayout::ENTRY_LANE_CENTER_Z_M);
 
-    // Xe đi thẳng Đông dọc inbound lane đến cột X của lô mình
-    const glm::vec3 bayApproachTarget(slot.center().x, floorY,
-                                      AeonLayout::ENTRY_LANE_CENTER_Z_M);
+    const float inboundAisleZ = AeonLayout::inboundTrackZ(slot.aisleZ());
+    const float outboundAisleZ = AeonLayout::outboundTrackZ(slot.aisleZ());
+    const glm::vec3 targetAisle(AeonLayout::CONNECTOR_X_M, floorY, inboundAisleZ);
 
-    // Xe rẽ 90° sang phía lô (N hoặc S) đến rìa aisle tiếp giáp lô
+    // Xe đi dọc làn inbound của aisle đến cột X của lô mình.
+    const glm::vec3 bayApproachTarget(slot.center().x, floorY,
+                                      inboundAisleZ);
+
+    // Đưa xe sát mép aisle ở đúng phía của ô đỗ trước khi rẽ vào ô.
     const glm::vec3 bayStagingTarget(
         slot.center().x, floorY,
-        slot.aisleZ() - static_cast<float>(slot.rowSide()) * AeonLayout::BAY_TURN_STAGING_OFFSET_M);
+        slot.aisleZ() + static_cast<float>(slot.rowSide()) *
+            (AeonLayout::AISLE_W_M * 0.5f - AeonLayout::BAY_TURN_STAGING_OFFSET_M));
 
     // Điểm đỗ trong lô (đầu xe vào trong)
     const glm::vec3 bayTarget(slot.center().x, floorY, slot.center().z);
@@ -652,13 +666,12 @@ inline void ParkingWorld::updateVehicle(Vehicle& vehicle, float dt) {
 
     // Lùi ra đến outbound lane
     const glm::vec3 outboundAlignTarget(slot.center().x, floorY,
-                                        AeonLayout::EXIT_LANE_CENTER_Z_M);
+                                        outboundAisleZ);
 
-    // Xe đi Tây dọc outbound lane đến connector
-    const glm::vec3 exitConnectorTarget(AeonLayout::CONNECTOR_X_M, floorY,
-                                        AeonLayout::EXIT_LANE_CENTER_Z_M);
+    // Xe đi Tây trong aisle outbound đến connector phía tây.
+    const glm::vec3 exitConnectorTarget(AeonLayout::CONNECTOR_X_M, floorY, outboundAisleZ);
 
-    // Tiếp tục Tây đến exit gate
+    // Tại connector, rẽ vào làn ra riêng rồi đi thẳng hai mét đến barie.
     const glm::vec3 exitLaneTarget(AeonLayout::CONNECTOR_X_M, floorY,
                                    AeonLayout::EXIT_LANE_CENTER_Z_M);
     const glm::vec3 exitGateTarget(AeonLayout::ENTRY_GATE_X_M,
@@ -684,29 +697,35 @@ inline void ParkingWorld::updateVehicle(Vehicle& vehicle, float dt) {
         break;
 
     case Vehicle::Phase::ToEntryConnector:
-        // Qua barem, tiếp tục thẳng Đông trên inbound lane
+        // Qua barie, đi thẳng đúng 2 m trước khi rẽ vào khu đỗ xe.
         if (moveToward(vehicle, connectorEntryTarget, AeonLayout::AUTO_VEHICLE_SPEED_MPS, dt,
-                       false, true)) {
+                       false, false)) {
             vehicle.phase_ = Vehicle::Phase::ToTargetAisle;
         }
         break;
 
     case Vehicle::Phase::ToTargetAisle:
-        // Vẫn đi thẳng Đông dọc inbound lane đến X của lô mình
-        if (moveToward(vehicle, bayApproachTarget, AeonLayout::AUTO_VEHICLE_SPEED_MPS, dt)) {
+        // Tại connector, rẽ khỏi làn dốc vào đúng aisle của ô được chọn.
+        if (moveToward(vehicle, targetAisle, AeonLayout::BAY_MANEUVER_SPEED_MPS, dt)) {
             vehicle.phase_ = Vehicle::Phase::ToBayApproach;
         }
         break;
 
     case Vehicle::Phase::ToBayApproach:
-        // Rẽ 90° vào aisle, tiến về phía lô (staging trước khi vào hẳn)
+        // Đi dọc aisle, song song với các ô đỗ.
+        if (moveToward(vehicle, bayApproachTarget, AeonLayout::AUTO_VEHICLE_SPEED_MPS, dt)) {
+            vehicle.phase_ = Vehicle::Phase::ToBayMouth;
+        }
+        break;
+
+    case Vehicle::Phase::ToBayMouth:
         if (moveToward(vehicle, bayStagingTarget, AeonLayout::BAY_MANEUVER_SPEED_MPS, dt)) {
             vehicle.phase_ = Vehicle::Phase::ToBayStaging;
         }
         break;
 
     case Vehicle::Phase::ToBayStaging:
-        // Tiến thẳng đầu xe vào lô (head-in parking)
+        // Tới cột ô đỗ trước, sau đó mới quay vuông góc để vào ô.
         {
             // Yaw hướng xe vào lô: nếu rowSide=+1 (Bắc, Z lớn) thì xe nhìn về +Z (PI/2)
             //                       nếu rowSide=-1 (Nam, Z nhỏ) thì xe nhìn về -Z (-PI/2)
@@ -762,7 +781,7 @@ inline void ParkingWorld::updateVehicle(Vehicle& vehicle, float dt) {
 
     case Vehicle::Phase::ToExitLane:
         if (moveToward(vehicle, exitLaneTarget, AeonLayout::AUTO_VEHICLE_SPEED_MPS, dt,
-                       false, true)) {
+                       false, false)) {
             vehicle.phase_ = Vehicle::Phase::ExitGateApproach;
         }
         break;

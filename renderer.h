@@ -662,6 +662,20 @@ inline car::Mesh makeUnitCylinderMesh(int slices = 16) {
     return mesh;
 }
 
+// Flat unit quad on the XZ plane (y = 0), normal +Y. No thickness and no side
+// faces, so it always reads as a painted-on decal rather than a raised strip.
+inline car::Mesh makeUnitXZQuadMesh() {
+    car::Mesh mesh;
+    const glm::vec3 n(0.0f, 1.0f, 0.0f);
+    mesh.v.push_back({{-0.5f, 0.0f, -0.5f}, n, {0.0f, 0.0f}, 0.0f});
+    mesh.v.push_back({{ 0.5f, 0.0f, -0.5f}, n, {1.0f, 0.0f}, 0.0f});
+    mesh.v.push_back({{ 0.5f, 0.0f,  0.5f}, n, {1.0f, 1.0f}, 0.0f});
+    mesh.v.push_back({{-0.5f, 0.0f,  0.5f}, n, {0.0f, 1.0f}, 0.0f});
+    mesh.i.push_back(0); mesh.i.push_back(1); mesh.i.push_back(2);
+    mesh.i.push_back(0); mesh.i.push_back(2); mesh.i.push_back(3);
+    return mesh;
+}
+
 // Low-level drawing front end shared by the scene and the HUD.
 // Supports optional box batching: consecutive drawBox calls with the same
 // colour are merged into a single dynamic mesh submission, cutting draw-call
@@ -682,6 +696,7 @@ public:
         createTextAtlas();
         boxMesh_.upload(makeUnitBoxMesh());
         cylinderMesh_.upload(makeUnitCylinderMesh(16));
+        quadMesh_.upload(makeUnitXZQuadMesh());
         carMesh_.upload(car::buildCar());
 
         // Dynamic batch buffers for merged box draws.
@@ -725,6 +740,7 @@ public:
         batchVao_ = batchVbo_ = batchEbo_ = 0;
         boxMesh_.destroy();
         cylinderMesh_.destroy();
+        quadMesh_.destroy();
         carMesh_.destroy();
         program_.destroy();
         carProgram_.destroy();
@@ -799,6 +815,41 @@ public:
         boxMesh_.draw();
         lastColorValid_ = false;
     }
+
+    // Flat rectangle lying on the XZ plane at the given Y, used for painted-on
+    // floor markings. A single quad with no side faces means it never reads as
+    // a raised strip. `center` is the centre point; `sizeXZ` is (widthX, widthZ).
+    void drawFlatXZ(const glm::vec3& center, const glm::vec2& sizeXZ,
+                    const glm::vec3& color) const {
+        flushBatch();
+        const glm::mat4 model =
+            glm::translate(glm::mat4(1.0f), center) *
+            glm::scale(glm::mat4(1.0f), glm::vec3(sizeXZ.x, 1.0f, sizeXZ.y));
+        program_.use();
+        program_.setMVP(viewProjection_ * model);
+        program_.setModel(model);
+        program_.setColor(color);
+        quadMesh_.draw();
+        lastColorValid_ = false;
+    }
+
+    // Flat rectangle on the XZ plane rotated around Y (e.g. angled arrows).
+    void drawFlatXZRotated(const glm::vec3& center, const glm::vec2& sizeXZ,
+                           float yaw, const glm::vec3& color) const {
+        flushBatch();
+        const glm::mat4 model =
+            glm::translate(glm::mat4(1.0f), center) *
+            glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0.0f, 1.0f, 0.0f)) *
+            glm::scale(glm::mat4(1.0f), glm::vec3(sizeXZ.x, 1.0f, sizeXZ.y));
+        program_.use();
+        program_.setMVP(viewProjection_ * model);
+        program_.setModel(model);
+        program_.setColor(color);
+        quadMesh_.draw();
+        lastColorValid_ = false;
+    }
+
+    const GpuMesh& quadMesh() const { return quadMesh_; }
 
     // Draws the car with the advanced PBR-ish shader. The camera and light are
     // transformed into the car's local frame so the procedural body details
@@ -1048,6 +1099,7 @@ private:
     ShaderProgram carProgram_;
     GpuMesh boxMesh_;
     GpuMesh cylinderMesh_;
+    GpuMesh quadMesh_;
     GpuMesh carMesh_;
     GLuint textAtlas_ = 0;
     glm::mat4 viewProjection_{1.0f};

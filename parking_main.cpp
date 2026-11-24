@@ -68,6 +68,7 @@ private:
 };
 
 bool Application::initialise() {
+    std::fprintf(stderr, "[init] glfwInit...\n"); std::fflush(stderr);
     if (!glfwInit()) {
         std::fprintf(stderr, "GLFW initialisation failed.\n");
         return false;
@@ -78,6 +79,7 @@ bool Application::initialise() {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, AeonLayout::MULTISAMPLE_SAMPLES);
 
+    std::fprintf(stderr, "[init] glfwCreateWindow...\n"); std::fflush(stderr);
     window_ = glfwCreateWindow(AeonLayout::WINDOW_WIDTH_PX, AeonLayout::WINDOW_HEIGHT_PX,
                                "AEON MALL Da Nang Thanh Khe - B1 Zone A Parking Simulation",
                                nullptr, nullptr);
@@ -87,9 +89,11 @@ bool Application::initialise() {
         return false;
     }
 
+    std::fprintf(stderr, "[init] glfwMakeContextCurrent...\n"); std::fflush(stderr);
     glfwMakeContextCurrent(window_);
     glfwSwapInterval(1);
     glewExperimental = GL_TRUE;
+    std::fprintf(stderr, "[init] glewInit...\n"); std::fflush(stderr);
     if (glewInit() != GLEW_OK) {
         std::fprintf(stderr, "GLEW initialisation failed.\n");
         glfwDestroyWindow(window_);
@@ -108,14 +112,17 @@ bool Application::initialise() {
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
 
+    std::fprintf(stderr, "[init] renderer_.initialise()...\n"); std::fflush(stderr);
     if (!renderer_.initialise()) {
         close();
         return false;
     }
+    std::fprintf(stderr, "[init] scene_.initialise()...\n"); std::fflush(stderr);
     if (!scene_.initialise()) {
         close();
         return false;
     }
+    std::fprintf(stderr, "[init] done.\n"); std::fflush(stderr);
     return true;
 }
 
@@ -129,12 +136,16 @@ void Application::close() {
 }
 
 int Application::run() {
+    std::fprintf(stderr, "[run] initialise...\n"); std::fflush(stderr);
     if (!initialise()) return 1;
 
+    std::fprintf(stderr, "[run] worldB1.initialise...\n"); std::fflush(stderr);
     worldB1_.initialise();
+    std::fprintf(stderr, "[run] worldB2.initialise...\n"); std::fflush(stderr);
     worldB2_.initialise();
     worldB1_.spawnVehicle();
     worldB2_.spawnVehicle();
+    std::fprintf(stderr, "[run] entering main loop...\n"); std::fflush(stderr);
 
     double previousTime = glfwGetTime();
     while (!glfwWindowShouldClose(window_)) {
@@ -376,6 +387,13 @@ void Application::onScroll(GLFWwindow* window, double, double yOffset) {
 } // namespace
 
 int main() {
+    std::fprintf(stderr, "[boot] Application constructing...\n");
+    std::fflush(stderr);
     Application application;
-    return application.run();
+    std::fprintf(stderr, "[boot] Application constructed, calling run()...\n");
+    std::fflush(stderr);
+    const int rc = application.run();
+    std::fprintf(stderr, "[boot] run() returned %d\n", rc);
+    std::fflush(stderr);
+    return rc;
 }

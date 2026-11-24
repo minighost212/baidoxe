@@ -49,6 +49,14 @@ if(BUILD_TESTING)
         target_compile_options(parking_world_tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME parking_world_tests COMMAND parking_world_tests)
+
+    add_executable(debug_full_state tests/debug_full_state.cpp)
+    target_include_directories(debug_full_state PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/stubs")
+
+    add_executable(debug_stuck tests/debug_stuck.cpp)
+    target_include_directories(debug_stuck PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/stubs")
 endif()
 
 # vios.obj is retained as the supplied reference asset. The current renderer

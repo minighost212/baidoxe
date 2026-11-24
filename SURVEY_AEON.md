@@ -4,7 +4,7 @@
 
 Dự án mô phỏng **AEON MALL Đà Nẵng Thanh Khê** tại số 46 Điện Biên Phủ, phường Thanh Khê, Đà Nẵng. Đây là AEON MALL nằm trong khối đế TTC Plaza Đà Nẵng, không phải dự án AEON MALL Đà Nẵng Hòa Xuân.
 
-Tài liệu này ghi lại dữ liệu đầu vào do người thực hiện cung cấp. Các liên kết tham khảo được giữ nguyên theo dữ liệu đầu vào; nội dung của từng nguồn chưa được xác minh độc lập trong lần cập nhật mã nguồn này. Phần mô phỏng giao thông dựng **B1 và B2 như hai thế giới demo độc lập**, mỗi tầng có một bố cục Zone A mẫu 64 ô ô tô. Đây là lựa chọn trình diễn, không phải khẳng định mỗi tầng thực tế có 64 ô theo cách sắp xếp này. Ngoại thất AEON, khu xe máy và lõi thang máy đều là hình học giả định, không phải bản dựng theo bản vẽ thi công.
+Tài liệu này ghi lại dữ liệu đầu vào do người thực hiện cung cấp. Các liên kết tham khảo được giữ nguyên theo dữ liệu đầu vào; nội dung của từng nguồn chưa được xác minh độc lập trong lần cập nhật mã nguồn này. Phần mô phỏng giao thông dựng **B1 và B2 như hai thế giới demo độc lập**, mỗi tầng có một bố cục Zone A mẫu 62 ô ô tô sau khi bỏ hai ô chắn lối nối. Đây là lựa chọn trình diễn, không phải khẳng định mỗi tầng thực tế có 62 ô theo cách sắp xếp này. Ngoại thất AEON, khu xe máy và lõi thang máy đều là hình học giả định, không phải bản dựng theo bản vẽ thi công.
 
 Quy ước tọa độ trong code: `1 unit = 1 m`; X là chiều dài; Z là chiều rộng; Y là chiều cao; cao độ âm nằm dưới mặt đất.
 
@@ -43,12 +43,12 @@ Các giá trị công khai này được lưu trong `AeonLayout` của `aeon_lay
 | Diện tích bãi đỗ bình quân mỗi tầng hầm | 23.000 / 2 | ≈ 11.500 m²/tầng | Chỉ tham khảo quy mô; không phải diện tích thực đo của B1 |
 | Xe máy trên mỗi ô tô theo sức chứa | 1.800 / 430 | ≈ 4,2 | Tỷ lệ sức chứa toàn tổ hợp |
 | Diện tích bình quân tham chiếu mỗi chỗ ô tô (gồm lối đi) | Ước lượng trong dữ liệu đầu vào | ≈ 25–30 m²/xe | Giá trị tham khảo; phụ thuộc giả định ô tô chiếm phần lớn diện tích bãi, không phải phép đo riêng của AEON |
-| Phần sức chứa ô tô đại diện của Zone A | 64 / 430 × 100 | ≈ 14,9% | Hiển thị thông tin `ZONE A SAMPLE 64 / APPROX 430 TOTAL` trên HUD |
+| Phần sức chứa ô tô đại diện của Zone A | 62 / 430 × 100 | ≈ 14,4% | Hiển thị thông tin `ZONE A SAMPLE 62 / APPROX 430 TOTAL` trên HUD |
 | Chiều dài dốc theo độ dốc tham chiếu | 3,5 / 0,12 | ≈ 29,17 m | Dốc mô phỏng từ cao độ 0 đến B1 -3,5 m; phụ thuộc giả định độ dốc |
-| Kích thước lõi đỗ xe | 40 × 32 | 1.280 m² | Hình học giả định cho Zone A |
-| Kích thước khu Zone A gồm làn chu vi | 52 × 44 | 2.288 m² | 40 + 2×6 theo X; 32 + 2×6 theo Z |
+| Kích thước lõi đỗ xe | 40 × 31 | 1.240 m² | Hình học giả định cho Zone A |
+| Kích thước khu Zone A gồm làn chu vi | 52 × 43 | 2.236 m² | 40 + 2×6 theo X; 31 + 2×6 theo Z |
 | Số ô trong một dãy | 40 / 2,5 | 16 | Số ô mỗi hàng |
-| Tổng ô Zone A | 2 mô-đun × 2 hàng × 16 | 64 | Ô tô con |
+| Tổng ô Zone A | 2 mô-đun × 2 hàng × 16 - 2 ô lối nối | 62 | Ô tô con |
 | Bước cột | 3 × 2,5 | 7,5 m | Theo lưới tham chiếu |
 
 Lưu ý quan trọng: **23.000 m²** là diện tích bãi đỗ xe của toàn tổ hợp, có thể bao gồm đường dốc, lõi thang, phòng kỹ thuật và khu xe máy. Không được coi 11.500 m²/tầng là diện tích sàn ô tô thuần hoặc lấy con số này làm mặt bằng thật của B1.
@@ -71,7 +71,7 @@ Lưu ý quan trọng: **23.000 m²** là diện tích bãi đỗ xe của toàn 
 | `STALL_W_M` | 2,5 m | Rộng ô |
 | `STALL_L_M` | 5,0 m | Dài ô |
 | `STALL_ANGLE_DEG` | 90° | Đỗ vuông góc |
-| `AISLE_W_M` | 6,0 m | Lối đi hai chiều tham chiếu |
+| `AISLE_W_M` | 5,5 m | Lối đi xe chính |
 | `PERIMETER_LANE_W_M` | 6,0 m | Làn chu vi |
 | `COLUMN_SIZE_M` | 0,6 × 0,6 m | Tiết diện cột |
 | `STALLS_PER_COLUMN_SPAN` | 3 ô | Bước cột theo 3 ô |
@@ -85,14 +85,15 @@ Lưu ý quan trọng: **23.000 m²** là diện tích bãi đỗ xe của toàn 
 
 ### 4.3 Bố cục 2 mô-đun Zone A
 
-- Hai mô-đun song song theo Z. Mỗi mô-đun rộng `5 + 6 + 5 = 16 m`, gồm hai dãy ô đỗ và một lối đi ở giữa.
+- Hai mô-đun song song theo Z. Mỗi mô-đun rộng `5 + 5,5 + 5 = 15,5 m`, gồm hai dãy ô đỗ và một lối đi ở giữa.
 - Mỗi dãy dài 40 m, chia thành 16 ô × 2,5 m.
-- Tổng cộng `2 mô-đun × 2 dãy × 16 ô = 64 ô ô tô`.
-- Lõi đỗ xe có kích thước 40 × 32 m.
-- Làn chu vi giả định rộng 6 m mỗi phía, tạo khu Zone A 52 × 44 m.
+- Bố trí gốc có `2 mô-đun × 2 dãy × 16 ô = 64 ô`; bỏ hai ô ở đầu hàng trong để thông lối nối, còn 62 ô.
+- Lõi đỗ xe có kích thước 40 × 31 m; đường xe chính rộng 5,5 m.
+- Làn chu vi giả định rộng 6 m mỗi phía, tạo khu Zone A 52 × 43 m.
 - Hai làn dốc song song, mỗi làn rộng 3,5 m, đặt tại cạnh phía Tây của khu đại diện. Vị trí cụ thể là quyết định thiết kế, không phải vị trí cổng thực tế của AEON.
 - Hình học cột sinh từ bước 7,5 m tại các cạnh lối đi. Với chiều dài 40 m, chỉ có 5 khoảng đủ 7,5 m (37,5 m) và phần cuối còn 2,5 m. Code giữ bước 7,5 m như dữ liệu đầu vào; không tự điều chỉnh thành bước khác.
-- Các làn trong mỗi lối đi được tách thành một hướng vào và một hướng ra để giảm xung đột trong bản demo. Đây là quy tắc điều phối mô phỏng, không phải xác nhận tổ chức giao thông thực tế.
+- Hai làn trong mỗi lối đi được tách thành một hướng vào và một hướng ra để giảm xung đột trong bản demo. Đây là quy tắc điều phối mô phỏng, không phải xác nhận tổ chức giao thông thực tế.
+- Hai barie riêng nằm trên hai làn tại `X=-23 m`, cách chân dốc `X=-26 m` ba mét. Xe đi thẳng thêm 2 m tới `X=-21 m`, sau đó rẽ vào một trong hai aisle; hai ô đầu chắn lối vào/ra đã được bỏ khỏi bố cục.
 
 ### 4.4 Các thông số chỉ phục vụ hoạt ảnh
 
@@ -107,7 +108,7 @@ Tốc độ xe, thời gian chờ cổng, thời gian đỗ ngẫu nhiên 90–1
 
 ### 4.6 Khu xe máy và lối tiếp cận [ASSUMED]
 
-- Mô hình tạo một annex xe máy minh họa bên ngoài ranh 52 × 44 m của Zone A ô tô, ở phía Bắc theo trục Z.
+- Mô hình tạo một annex xe máy minh họa bên ngoài ranh 52 × 43 m của Zone A ô tô, ở phía Bắc theo trục Z.
 - Annex có 2 hàng × 12 ô = 24 ô xe máy demo trên mỗi tầng được mô phỏng; mỗi ô 0,85 × 2,0 m, lối cách hàng và lối nối tới khu chính đều là giả định.
 - 8 mô hình xe máy tĩnh được đặt ban đầu. Phím `B` thêm một xe vào ô trống; phím `X` xóa xe cuối cùng. Đây là công cụ trình diễn trạng thái đỗ, không phải mô phỏng xe máy chạy vào/ra.
 - Con số 1.800 xe máy là sức chứa ước lượng của toàn bộ tổ hợp và hai tầng hầm; không dùng để suy ra số ô của annex demo.
@@ -121,18 +122,18 @@ Tốc độ xe, thời gian chờ cổng, thời gian đỗ ngẫu nhiên 90–1
 ### 4.8 Tầng B2 [ASSUMED / DERIVED]
 
 - B2 dùng cao độ `-7,0 m`; B1 dùng `-3,5 m`. Hai giá trị là giả định, không phải số đo công trình.
-- Tạo một `ParkingWorld` riêng cho B2, có 64 ô xe hơi demo độc lập, annex 24 ô xe máy demo và lõi thang tĩnh giống bố cục trình diễn B1.
+- Tạo một `ParkingWorld` riêng cho B2, có 62 ô xe hơi demo độc lập, annex 24 ô xe máy demo và lõi thang tĩnh giống bố cục trình diễn B1.
 - Dốc B2 bắt đầu ở cao độ B1 và xuống B2 với độ giảm 3,5 m; chiều dài được suy ra từ độ dốc tham chiếu 12% (xấp xỉ 29,17 m).
 - Phím `1` chọn B1; phím `2` chọn B2. Hai thế giới được cập nhật song song, nhưng trạng thái chỗ đỗ độc lập.
 
 ## 5. Những phần đã được tạo trong code
 
 1. `aeon_layout.h`: tập trung dữ liệu công khai, giá trị suy ra, giả định, giới hạn mô hình và hàm sinh tọa độ.
-2. `parking_main.cpp`: sinh 64 ô đỗ, cột, vạch, làn, mũi tên, đường dốc, barrier, vị trí camera và waypoint từ `AeonLayout`.
+2. `parking_main.cpp`: dựng ô đỗ, cột, vạch, làn 5,5 m, mũi tên, đường dốc, barrier, vị trí camera và waypoint từ `AeonLayout`.
 3. Ô đỗ có ba trạng thái `Free`, `Reserved`, `Occupied`.
 4. Xe tự động chạy từ dốc vào, qua barrier, vào làn, tiếp cận ô, lùi vào ô, chờ, tiến ra, đến barrier ra, chờ mô phỏng thanh toán rồi chạy lên dốc.
 5. Hai luồng trong aisle được tách thành đường vào và đường ra; va chạm được kiểm tra bằng hình chữ nhật bao đơn giản theo hướng xe.
-6. HUD hiển thị `ZONE A SAMPLE 64 / APPROX 430 TOTAL`, số xe, số ô trống/đặt trước/đã chiếm, trạng thái FULL, hàng đợi thanh toán và cảnh báo bố cục giả định.
+6. HUD hiển thị `ZONE A SAMPLE 62 / APPROX 430 TOTAL`, số xe, số ô trống/đặt trước/đã chiếm, trạng thái FULL, hàng đợi thanh toán và cảnh báo bố cục giả định.
 7. Mô hình xe được giữ theo kích thước tham chiếu Vios và bỏ bảng/đèn nóc kiểu xe tập lái để phù hợp hơn với xe con thông thường.
 8. `scene_view.h`: mô hình ngoại thất AEON dạng massing, gồm khối đế, hai tháp, mặt tiền uốn lượn, cổng vòm, bảng hiệu và phố cây xanh; có thể bật/tắt riêng với B1.
 
@@ -158,9 +159,9 @@ Các dữ liệu dưới đây **không tìm thấy trong bộ dữ liệu công
 
 ## 7. Giới hạn của mô phỏng hiện tại
 
-- Mô phỏng giao thông chỉ dựng B1 – Zone A đại diện 64 ô tô, không dựng toàn bộ 430 ô ô tô và 1.800 ô xe máy của toàn tổ hợp. Ngoại thất chỉ là massing nhận diện, không theo tỷ lệ khảo sát.
-- Sơ đồ 52 × 44 m, vị trí ramp, gate, columns và các làn là giả định thiết kế; không được gọi là mặt bằng đo được của AEON.
-- B2 có cảnh mô phỏng riêng với 64 ô demo, ramp B1–B2 và annex phụ. Đây là bố cục lặp lại để kiểm thử/tương tác; không phải bản vẽ B2 thật hoặc thông tin phân bố 430 ô xe của tổ hợp.
+- Mô phỏng giao thông chỉ dựng B1 – Zone A đại diện 62 ô tô, không dựng toàn bộ 430 ô ô tô và 1.800 ô xe máy của toàn tổ hợp. Ngoại thất chỉ là massing nhận diện, không theo tỷ lệ khảo sát.
+- Sơ đồ 52 × 43 m, vị trí ramp, gate, columns và các làn là giả định thiết kế; không được gọi là mặt bằng đo được của AEON.
+- B2 có cảnh mô phỏng riêng với 62 ô demo, ramp B1–B2 và annex phụ. Đây là bố cục lặp lại để kiểm thử/tương tác; không phải bản vẽ B2 thật hoặc thông tin phân bố 430 ô xe của tổ hợp.
 - Hàng đợi ra cổng chỉ mô phỏng thời gian chờ hỗ trợ thanh toán; chưa tích hợp thanh toán thật, không tính phí tự động theo thời gian thực và không kết nối thiết bị.
 - Kiểm tra va chạm xe dùng footprint hình chữ nhật gần đúng theo hướng xe và dung sai cao độ trên dốc; không phải physics engine hoặc thuật toán tìm đường tối ưu, cũng chưa đảm bảo tránh deadlock ở mọi tình huống.
 - Xe máy là mô hình tĩnh có thể thêm/xóa; chưa có route xe máy hoặc logic xe máy ra/vào.
