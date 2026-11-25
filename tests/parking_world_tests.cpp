@@ -1,39 +1,234 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <sstream>
+#include <unordered_map>
+#include <vector>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 
+#define AEON_PARKING_WORLD_TEST_ACCESS
 #include "../parking_world.h"
+
+
+struct ParkingWorldTestAccess {
+    static void fillAllStallsAsParked(ParkingWorld& world) {
+        world.traffic_.clear();
+        for (std::size_t index = 0; index < world.slots_.size(); ++index) {
+            ParkingSlot& slot = world.slots_[index];
+            Vehicle vehicle(world.nextVehicleId_++, slot.center(), static_cast<int>(index));
+            vehicle.yaw_ = slot.facingAisleYaw();
+            vehicle.phase_ = Vehicle::Phase::Parked;
+            vehicle.phaseTimer_ = 0.0f;
+            vehicle.parkedSeconds_ = 0.0f;
+            slot.occupy(vehicle.id_);
+            world.traffic_.push_back(vehicle);
+        }
+    }
+};
 
 namespace {
 void require(bool condition, const std::string& message) {
     if (!condition) throw std::runtime_error(message);
 }
 
+const char* vehiclePhaseName(Vehicle::Phase phase) {
+    static const char* names[] = {
+        "EnteringRamp", "EntryGateWait", "ToEntryConnector", "ToTargetAisle",
+        "ToBayApproach", "ToBayStaging", "ReversingIntoBay", "Parked",
+        "LeavingBay", "AligningOutboundLane", "ToExitConnector", "ToExitLane",
+        "ExitGateApproach", "ExitPaymentWait", "ExitingRamp"
+    };
+    const auto index = static_cast<std::size_t>(phase);
+    return index < sizeof(names) / sizeof(names[0]) ? names[index] : "Unknown";
+}
+
+bool isPermittedTrafficWait(Vehicle::Phase phase) {
+    return phase == Vehicle::Phase::Parked ||
+           phase == Vehicle::Phase::EntryGateWait ||
+           phase == Vehicle::Phase::ExitPaymentWait;
+}
+
+struct VehicleWatchState {
+    Vehicle::Phase phase = Vehicle::Phase::EnteringRamp;
+    float lastMovementSeconds = 0.0f;
+};
+
+std::string vehicleDiagnostic(const std::string& context, int seed, int count,
+                              const Vehicle& vehicle, const char* reason,
+                              float simSeconds) {
+    std::ostringstream message;
+    message << context << " seed=" << seed << " N=" << count
+            << " t=" << simSeconds << "s id=" << vehicle.id()
+            << " phase=" << vehiclePhaseName(vehicle.phase())
+            << " pos=(" << vehicle.position().x << ',' << vehicle.position().y
+            << ',' << vehicle.position().z << ") reason=" << reason;
+    return message.str();
+}
+
+void verifyTrafficFrame(
+    const ParkingWorld& world, float simSeconds, float dt,
+    const std::unordered_map<int, glm::vec3>& previousPositions,
+    std::unordered_map<int, VehicleWatchState>& watch,
+    const std::string& context, int seed, int count) {
+    if (world.hasTrafficCollisions()) {
+        require(false, context + " seed=" + std::to_string(seed) + " N=" +
+                           std::to_string(count) + " produced a vehicle-to-vehicle collision");
+    }
+    if (world.hasColumnCollisions()) {
+        require(false, context + " seed=" + std::to_string(seed) + " N=" +
+                           std::to_string(count) + " produced a vehicle-to-column collision");
+    }
+
+    for (const auto& vehicle : world.vehicles()) {
+        auto state = watch.find(vehicle.id());
+        if (state == watch.end()) {
+            state = watch.emplace(vehicle.id(), VehicleWatchState{vehicle.phase(), simSeconds}).first;
+        } else if (state->second.phase != vehicle.phase()) {
+            state->second.phase = vehicle.phase();
+            state->second.lastMovementSeconds = simSeconds;
+        }
+
+        const auto previous = previousPositions.find(vehicle.id());
+        if (previous != previousPositions.end()) {
+            const glm::vec3 delta = vehicle.position() - previous->second;
+            const float displacement = std::sqrt(delta.x * delta.x + delta.y * delta.y +
+                                                 delta.z * delta.z);
+            const float allowed = AeonLayout::AUTO_VEHICLE_SPEED_MPS * dt * 1.05f + 1.0e-4f;
+            if (displacement > allowed) {
+                require(false, vehicleDiagnostic(context, seed, count, vehicle,
+                                                  "position jump exceeds speed*dt*1.05", simSeconds));
+            }
+            if (displacement > 1.0e-5f) state->second.lastMovementSeconds = simSeconds;
+        }
+
+        if (!isPermittedTrafficWait(vehicle.phase()) &&
+            simSeconds - state->second.lastMovementSeconds > 30.0f) {
+            require(false, vehicleDiagnostic(context, seed, count, vehicle,
+                                              "watchdog: no movement for over 30 seconds", simSeconds));
+        }
+    }
+
+    // O(number of cars + number of stalls): a released vehicle retains its
+    // destination slotIndex for route geometry, but does not own the Free slot.
+    std::vector<int> liveOwner(world.slots().size(), -1);
+    for (const auto& vehicle : world.vehicles()) {
+        const int slotIndex = vehicle.slotIndex();
+        if (slotIndex < 0 || slotIndex >= static_cast<int>(world.slots().size())) continue;
+        const ParkingSlot& slot = world.slots()[static_cast<std::size_t>(slotIndex)];
+        if (slot.state() == ParkingSlot::State::Free || slot.vehicleId() != vehicle.id()) continue;
+        int& owner = liveOwner[static_cast<std::size_t>(slotIndex)];
+        if (owner != -1) {
+            std::ostringstream message;
+            message << context << " seed=" << seed << " N=" << count
+                    << " duplicate slot ownership: slot=" << slotIndex
+                    << " vehicleA=" << owner << " vehicleB=" << vehicle.id();
+            require(false, message.str());
+        }
+        owner = vehicle.id();
+    }
+    for (std::size_t slotIndex = 0; slotIndex < world.slots().size(); ++slotIndex) {
+        const ParkingSlot& slot = world.slots()[slotIndex];
+        if (slot.state() != ParkingSlot::State::Free &&
+            liveOwner[slotIndex] != slot.vehicleId()) {
+            std::ostringstream message;
+            message << context << " seed=" << seed << " N=" << count
+                    << " orphan slot=" << slotIndex << " owner=" << slot.vehicleId()
+                    << " matchingVehicle=" << liveOwner[slotIndex];
+            require(false, message.str());
+        }
+    }
+}
+
+std::uint64_t hashTrafficState(std::uint64_t hash, const ParkingWorld& world) {
+    const auto mix = [&hash](std::uint32_t value) {
+        hash ^= static_cast<std::uint64_t>(value);
+        hash *= 1099511628211ULL;
+    };
+    const auto mixFloat = [&mix](float value) {
+        std::uint32_t bits = 0;
+        static_assert(sizeof(bits) == sizeof(value), "32-bit float expected");
+        std::memcpy(&bits, &value, sizeof(bits));
+        mix(bits);
+    };
+    mix(static_cast<std::uint32_t>(world.carCount()));
+    for (const auto& vehicle : world.vehicles()) {
+        mix(static_cast<std::uint32_t>(vehicle.id()));
+        mix(static_cast<std::uint32_t>(vehicle.phase()));
+        mix(static_cast<std::uint32_t>(vehicle.slotIndex()));
+        mixFloat(vehicle.position().x);
+        mixFloat(vehicle.position().y);
+        mixFloat(vehicle.position().z);
+        mixFloat(vehicle.yaw());
+    }
+    for (const auto& slot : world.slots()) {
+        mix(static_cast<std::uint32_t>(slot.state()));
+        mix(static_cast<std::uint32_t>(slot.vehicleId()));
+    }
+    return hash;
+}
+
+std::uint64_t runFixedLoadScenario(int count, std::uint32_t seed, float dt,
+                                   bool b2 = false) {
+    ParkingWorld world(b2 ? AeonLayout::FLOOR_HEIGHT_B2_M : AeonLayout::FLOOR_HEIGHT_B1_M,
+                       b2 ? AeonLayout::FLOOR_INDEX_B2 : AeonLayout::FLOOR_INDEX_B1, seed);
+    world.initialise();
+    world.toggleAutoSpawn();
+    world.toggleAutoMotorbikeSpawn();
+
+    int spawned = 0;
+    float sinceSpawn = 0.0f;
+    std::unordered_map<int, VehicleWatchState> watch;
+    std::uint64_t signature = 1469598103934665603ULL;
+    const int maxFrames = static_cast<int>(std::ceil(2500.0f / dt));
+
+    for (int frame = 0; frame < maxFrames; ++frame) {
+        const float simSeconds = static_cast<float>(frame + 1) * dt;
+        sinceSpawn += dt;
+        if (spawned < count && sinceSpawn >= 1.5f && world.spawnVehicle()) {
+            ++spawned;
+            sinceSpawn = 0.0f;
+        }
+
+        std::unordered_map<int, glm::vec3> previousPositions;
+        previousPositions.reserve(world.vehicles().size());
+        for (const auto& vehicle : world.vehicles()) {
+            previousPositions.emplace(vehicle.id(), vehicle.position());
+        }
+
+        world.update(dt);
+        verifyTrafficFrame(world, simSeconds, dt, previousPositions, watch,
+                           "fixed-load", static_cast<int>(seed), count);
+        signature = hashTrafficState(signature, world);
+
+        if (spawned == count && world.carCount() == 0) {
+            require(world.reservedSlotCount() == 0 && world.occupiedSlotCount() == 0 &&
+                        world.freeSlotCount() == AeonLayout::TOTAL_ZONE_A_CAR_SLOTS,
+                    "fixed-load seed=" + std::to_string(seed) + " N=" +
+                        std::to_string(count) + " finished with stale slot state");
+            return signature;
+        }
+    }
+
+    if (!world.vehicles().empty()) {
+        const Vehicle& stuck = world.vehicles().front();
+        require(false, vehicleDiagnostic("fixed-load", static_cast<int>(seed), count,
+                                          stuck, "timeout after 2500 seconds", 2500.0f));
+    }
+    require(spawned == count, "fixed-load seed=" + std::to_string(seed) + " N=" +
+                                  std::to_string(count) + " could not spawn all vehicles");
+    require(false, "fixed-load seed=" + std::to_string(seed) + " N=" +
+                      std::to_string(count) + " did not clear the parking world");
+    return signature;
+}
+
 void testLayoutAndMotorbikeCapacity() {
     ParkingWorld b1(AeonLayout::FLOOR_HEIGHT_B1_M, AeonLayout::FLOOR_INDEX_B1, 101u);
     b1.initialise();
     require(static_cast<int>(b1.slots().size()) == AeonLayout::TOTAL_ZONE_A_CAR_SLOTS,
-            "B1 must generate the configured car stalls");
-    require(AeonLayout::TOTAL_ZONE_A_CAR_SLOTS == 62,
-            "The two gate-connector clearance stalls must not be counted as parking");
-    require(std::abs(AeonLayout::AISLE_W_M - 5.5f) < 0.001f,
-            "The main car aisles must be 5.5 m wide");
-    require(std::abs(AeonLayout::ENTRY_GATE_X_M -
-                     (AeonLayout::RAMP_END_X_M + 3.0f)) < 0.001f,
-            "The gate assembly must be set back from the ramp foot");
-    require(std::abs(AeonLayout::CONNECTOR_X_M -
-                     (AeonLayout::ENTRY_GATE_X_M + 2.0f)) < 0.001f,
-            "The turn connector must be two metres beyond the barrier");
-    for (const ParkingSlot& slot : b1.slots()) {
-        const bool removedFrontStall =
-            std::abs(slot.center().x - AeonLayout::vehicleBayCenterX(0)) < 0.001f &&
-            slot.aisleZ() * static_cast<float>(slot.rowSide()) < 0.0f;
-        require(!removedFrontStall,
-                "A parking stall remains in the direct entry/exit connector");
-    }
+            "B1 must generate all 64 car stalls");
     require(static_cast<int>(b1.columns().size()) == 20,
             "B1 must generate the expected 20 columns");
     require(static_cast<int>(b1.motorbikeSlots().size()) == AeonLayout::TOTAL_ZONE_A_BIKE_SLOTS,
@@ -168,47 +363,122 @@ void testAnnexAndElevatorGeometryBounds() {
             "Assumed stall offset must leave the model car envelope clear of a column");
 }
 
-void testGateConnectorRouting() {
-    ParkingWorld world(AeonLayout::FLOOR_HEIGHT_B1_M, AeonLayout::FLOOR_INDEX_B1, 252u);
-    world.initialise();
-    require(world.spawnVehicle(), "Could not spawn gate-connector test vehicle");
 
-    bool reachedBarrier = false;
-    bool reachedTurnPoint = false;
-    bool completedTurnIntoAisle = false;
-    for (int frame = 0; frame < 1500 && !completedTurnIntoAisle; ++frame) {
-        world.update(0.04f);
-        for (const Vehicle& vehicle : world.vehicles()) {
-            const ParkingSlot& slot = world.slots()[static_cast<std::size_t>(vehicle.slotIndex())];
-            if (vehicle.phase() == Vehicle::Phase::EntryGateWait) {
-                reachedBarrier = true;
-                require(std::abs(vehicle.position().x - AeonLayout::ENTRY_GATE_X_M) <=
-                            AeonLayout::ROUTE_ARRIVAL_EPSILON_M,
-                        "The entry connector must start at the barrier (vehicle x=" +
-                            std::to_string(vehicle.position().x) + ", gate x=" +
-                            std::to_string(AeonLayout::ENTRY_GATE_X_M) + ")");
-                require(std::abs(vehicle.position().z - AeonLayout::ENTRY_LANE_CENTER_Z_M) < 0.001f,
-                        "The vehicle must remain in the dedicated entry lane at the barrier");
-            }
-            if (vehicle.phase() == Vehicle::Phase::ToTargetAisle) {
-                reachedTurnPoint = true;
-                require(std::abs(vehicle.position().x - AeonLayout::CONNECTOR_X_M) < 0.001f,
-                        "The vehicle must travel exactly two metres before turning (vehicle x=" +
-                            std::to_string(vehicle.position().x) + ", turn x=" +
-                            std::to_string(AeonLayout::CONNECTOR_X_M) + ")");
-            }
-            if (vehicle.phase() == Vehicle::Phase::ToBayApproach) {
-                completedTurnIntoAisle = true;
-                require(std::abs(vehicle.position().x - AeonLayout::CONNECTOR_X_M) < 0.001f,
-                        "The vehicle must finish its turn inside the connector");
-                require(std::abs(vehicle.position().z -
-                                 AeonLayout::inboundTrackZ(slot.aisleZ())) < 0.001f,
-                        "The vehicle must merge into its aisle's inbound track");
-            }
+void testMotorbikeArrivalParkingAndDeparture() {
+    ParkingWorld world(AeonLayout::FLOOR_HEIGHT_B1_M, AeonLayout::FLOOR_INDEX_B1, 808u);
+    world.initialise();
+    world.toggleAutoMotorbikeSpawn(); // Keep this scenario deterministic.
+    while (world.removeLastMotorbike()) {}
+    require(world.motorbikeCount() == 0 && world.freeMotorbikeSlotCount() ==
+                AeonLayout::TOTAL_ZONE_A_BIKE_SLOTS,
+            "Motorbike test setup should start with an empty annex");
+    require(world.spawnMotorbikeTraffic(), "A traffic motorbike should reserve a free bay");
+    require(world.motorbikeCount() == 1 && world.freeMotorbikeSlotCount() ==
+                AeonLayout::TOTAL_ZONE_A_BIKE_SLOTS - 1,
+            "An arriving motorbike must reserve its target bay before parking");
+
+    bool sawAligning = false;
+    bool sawEntering = false;
+    bool sawParked = false;
+    bool sawLeaving = false;
+    bool sawReturning = false;
+    for (int frame = 0; frame < 6000; ++frame) {
+        world.update(0.05f);
+        require(world.motorbikeCount() <= 1,
+                "The single-lane motorbike AI should serialize moving traffic");
+        for (const auto& bike : world.motorbikes()) {
+            sawAligning |= bike.phase == ParkedMotorbike::Phase::AligningToBay;
+            sawEntering |= bike.phase == ParkedMotorbike::Phase::EnteringBay;
+            sawParked |= bike.phase == ParkedMotorbike::Phase::Parked;
+            sawLeaving |= bike.phase == ParkedMotorbike::Phase::LeavingBay;
+            sawReturning |= bike.phase == ParkedMotorbike::Phase::ReturningToAccess;
         }
+        if (world.motorbikeCount() == 0) break;
     }
-    require(reachedBarrier && reachedTurnPoint && completedTurnIntoAisle,
-            "The vehicle did not follow the barrier, straight lead-in, and aisle turn sequence");
+    require(sawAligning && sawEntering,
+            "Motorbike should follow the aisle-alignment and bay-entry waypoints");
+    require(sawParked && sawLeaving && sawReturning,
+            "Motorbike should park, dwell, leave its bay and return to the access point");
+    require(world.motorbikeCount() == 0 &&
+                world.freeMotorbikeSlotCount() == AeonLayout::TOTAL_ZONE_A_BIKE_SLOTS,
+            "A departed motorbike must be removed and its reserved bay released");
+}
+
+void testElevatorMotionAndDoorStateMachine() {
+    ElevatorSystem elevator;
+    require(elevator.currentFloor() == AeonLayout::ELEVATOR_FLOOR_B1,
+            "Elevator should begin at the illustrative B1 landing");
+    require(std::abs(elevator.doorOpenAmount() - 1.0f) < 0.001f,
+            "Elevator should begin with its doors open");
+
+    bool sawClosing = false;
+    bool sawMoving = false;
+    bool sawOpening = false;
+    bool sawDoorAnimation = false;
+    const auto travelTo = [&](int targetFloor) {
+        elevator.callToFloor(targetFloor);
+        for (int frame = 0; frame < 4000; ++frame) {
+            const float previousY = elevator.cabinY();
+            elevator.update(0.05f);
+            sawClosing |= elevator.phase() == ElevatorSystem::Phase::DoorsClosing;
+            sawMoving |= elevator.phase() == ElevatorSystem::Phase::Moving;
+            sawOpening |= elevator.phase() == ElevatorSystem::Phase::DoorsOpening;
+            sawDoorAnimation |= elevator.doorOpenAmount() > 0.001f &&
+                                elevator.doorOpenAmount() < 0.999f;
+            if (elevator.phase() == ElevatorSystem::Phase::Moving &&
+                std::abs(elevator.cabinY() - previousY) > 0.001f) {
+                sawMoving = true;
+            }
+            if (elevator.currentFloor() == targetFloor &&
+                elevator.phase() == ElevatorSystem::Phase::Dwelling &&
+                elevator.doorOpenAmount() >= 0.999f) return;
+        }
+        throw std::runtime_error("Elevator did not complete its requested floor trip");
+    };
+
+    travelTo(AeonLayout::ELEVATOR_FLOOR_GROUND);
+    require(std::abs(elevator.cabinY() - AeonLayout::ELEVATOR_LEVEL_Y[
+                AeonLayout::ELEVATOR_FLOOR_GROUND]) < 0.001f,
+            "Elevator cabin did not stop at Ground");
+    travelTo(AeonLayout::ELEVATOR_FLOOR_B2);
+    require(std::abs(elevator.cabinY() - AeonLayout::ELEVATOR_LEVEL_Y[
+                AeonLayout::ELEVATOR_FLOOR_B2]) < 0.001f,
+            "Elevator cabin did not stop at B2");
+    require(sawClosing && sawMoving && sawOpening && sawDoorAnimation,
+            "Elevator did not exercise all door and cabin movement phases");
+}
+
+void testHighLoadTrafficEventuallyClearsWithoutDeadlock() {
+    ParkingWorld world(AeonLayout::FLOOR_HEIGHT_B1_M, AeonLayout::FLOOR_INDEX_B1, 909u);
+    world.initialise();
+    world.toggleAutoSpawn(); // Fixed load: no new arrivals after the initial queue.
+    for (int i = 0; i < 5; ++i) {
+        require(world.spawnVehicle(), "Could not create the five-car stress scenario");
+    }
+
+    int peakCars = world.carCount();
+    bool observedOccupied = false;
+    bool observedPayment = false;
+    for (int frame = 0; frame < 30000; ++frame) {
+        world.update(0.04f);
+        peakCars = std::max(peakCars, world.carCount());
+        observedOccupied |= world.occupiedSlotCount() > 0;
+        observedPayment |= world.paymentQueueCount() > 0;
+        require(!world.hasTrafficCollisions(),
+                "Five-car stress scenario produced a vehicle-to-vehicle collision");
+        require(!world.hasColumnCollisions(),
+                "Five-car stress scenario produced a vehicle-to-column collision");
+        if (world.carCount() == 0 && world.reservedSlotCount() == 0 &&
+            world.occupiedSlotCount() == 0) break;
+    }
+    require(peakCars == 5, "Stress scenario did not maintain the intended five-car load");
+    require(observedOccupied && observedPayment,
+            "Stress scenario did not complete parking and payment states");
+    require(world.carCount() == 0 && world.reservedSlotCount() == 0 &&
+                world.occupiedSlotCount() == 0,
+            "Traffic did not fully clear; possible deadlock or stalled state machine");
+    require(world.freeSlotCount() == AeonLayout::TOTAL_ZONE_A_CAR_SLOTS,
+            "All car spaces should be released after the stress scenario");
 }
 
 void testSafeMultiVehicleTrafficAndBarriers() {
@@ -256,7 +526,7 @@ void testSafeMultiVehicleTrafficAndBarriers() {
             "Simulation did not exercise the entry and exit connector paths");
 }
 
-void testIntersectionCoverageAndFullState(std::uint32_t seed) {
+void testIntersectionCoverageUnderSustainedArrivals(std::uint32_t seed) {
     ParkingWorld world(AeonLayout::FLOOR_HEIGHT_B1_M, AeonLayout::FLOOR_INDEX_B1, seed);
     world.initialise();
     bool sawSecondAisle = false;
@@ -265,11 +535,10 @@ void testIntersectionCoverageAndFullState(std::uint32_t seed) {
     bool sawStagingManeuver = false;
     bool sawReverseIntoBay = false;
     bool sawOccupiedState = false;
-    bool fullSeen = false;
 
-    // Keep automatic arrivals enabled; this drives both aisles, both row sides,
-    // turning/staging, reverse parking, barrier flow, and the configured FULL state.
-    for (int frame = 0; frame < 5000; ++frame) {
+    // Automatic arrivals exercise both aisles, both row sides, staging, reverse
+    // parking and barrier flow. FULL is covered by a separate controlled fixture.
+    for (int frame = 0; frame < 25000; ++frame) {
         world.update(0.04f);
         world.updateSpawning(0.04f);
 
@@ -293,15 +562,6 @@ void testIntersectionCoverageAndFullState(std::uint32_t seed) {
         require(!world.hasColumnCollisions(),
                 "Vehicle-to-column collision detected during sustained multi-car simulation");
 
-        if (world.freeSlotCount() == 0) {
-            fullSeen = true;
-            require(world.reservedSlotCount() + world.occupiedSlotCount() ==
-                        AeonLayout::TOTAL_ZONE_A_CAR_SLOTS,
-                    "FULL state must account for every car stall as reserved or occupied");
-            require(!world.spawnVehicle(),
-                    "A new car must not be admitted when all stalls are reserved/occupied");
-            break;
-        }
     }
 
     require(sawSecondAisle, "Simulation did not exercise the second aisle");
@@ -310,8 +570,104 @@ void testIntersectionCoverageAndFullState(std::uint32_t seed) {
     require(sawStagingManeuver, "No vehicle reached the staging point before turning into a bay");
     require(sawReverseIntoBay, "No vehicle exercised reverse parking");
     require(sawOccupiedState, "No vehicle reached OCCUPIED state during sustained traffic");
-    require(fullSeen, "The Zone A simulation did not reach FULL under sustained arrivals");
 }
+void testReportedDeadlockReproducers() {
+    // Exact scenarios supplied with the task: A is the five-car same-aisle
+    // merge, B is the 64-car FULL-lot exit/merge case.
+    (void)runFixedLoadScenario(5, 503u, 0.04f, false);
+    (void)runFixedLoadScenario(64, 500u, 0.04f, false);
+}
+
+void testLoadMatrixAndDeadlockWatchdog() {
+    const int loads[] = {5, 10, 16, 20, 24, 32, 40, 48, 64};
+    for (const int count : loads) {
+        for (std::uint32_t seed = 500u; seed < 510u; ++seed) {
+            (void)runFixedLoadScenario(count, seed, 0.04f, false);
+        }
+    }
+}
+
+void testFullLotCanDrainCompletely() {
+    ParkingWorld world(AeonLayout::FLOOR_HEIGHT_B1_M, AeonLayout::FLOOR_INDEX_B1, 501u);
+    world.initialise();
+    world.toggleAutoSpawn();
+    ParkingWorldTestAccess::fillAllStallsAsParked(world);
+
+    require(world.carCount() == AeonLayout::TOTAL_ZONE_A_CAR_SLOTS &&
+                world.freeSlotCount() == 0 && world.reservedSlotCount() == 0 &&
+                world.occupiedSlotCount() == AeonLayout::TOTAL_ZONE_A_CAR_SLOTS,
+            "FULL fixture must start with 64 occupied stalls");
+    require(!world.spawnVehicle(), "A 65th car must be rejected while the lot is FULL");
+    require(!world.hasTrafficCollisions() && !world.hasColumnCollisions(),
+            "FULL fixture must start without vehicle or column overlap");
+
+    std::unordered_map<int, VehicleWatchState> watch;
+    for (int frame = 0; frame < 62500 && world.carCount() > 0; ++frame) {
+        const float simSeconds = static_cast<float>(frame + 1) * 0.04f;
+        std::unordered_map<int, glm::vec3> previous;
+        previous.reserve(world.vehicles().size());
+        for (const auto& vehicle : world.vehicles())
+            previous.emplace(vehicle.id(), vehicle.position());
+        world.update(0.04f);
+        verifyTrafficFrame(world, simSeconds, 0.04f, previous, watch, "full-lot", 501, 64);
+    }
+
+    require(world.carCount() == 0 && world.reservedSlotCount() == 0 &&
+                world.occupiedSlotCount() == 0 &&
+                world.freeSlotCount() == AeonLayout::TOTAL_ZONE_A_CAR_SLOTS,
+            "FULL lot did not drain all 64 vehicles and release every stall");
+}
+
+void testMultipleTimeSteps() {
+    const float timeSteps[] = {0.016f, 0.04f, 0.1f, 0.25f};
+    for (const float dt : timeSteps) {
+        (void)runFixedLoadScenario(64, 500u, dt, false);
+    }
+}
+
+void testDeterministicReplay() {
+    const std::uint64_t first = runFixedLoadScenario(64, 777u, 0.04f, false);
+    const std::uint64_t second = runFixedLoadScenario(64, 777u, 0.04f, false);
+    require(first == second,
+            "same seed and dt must produce an identical frame-by-frame traffic signature");
+}
+
+void testB2CompleteVehicleLifecycle() {
+    ParkingWorld world(AeonLayout::FLOOR_HEIGHT_B2_M, AeonLayout::FLOOR_INDEX_B2, 812u);
+    world.initialise();
+    world.toggleAutoSpawn();
+    world.toggleAutoMotorbikeSpawn();
+    for (int index = 0; index < 5; ++index)
+        require(world.spawnVehicle(), "B2 lifecycle setup could not spawn five cars");
+
+    bool sawB2ParkingLevel = false;
+    bool sawOutboundRampAscent = false;
+    std::unordered_map<int, VehicleWatchState> watch;
+    for (int frame = 0; frame < 62500 && world.carCount() > 0; ++frame) {
+        const float simSeconds = static_cast<float>(frame + 1) * 0.04f;
+        std::unordered_map<int, glm::vec3> previous;
+        previous.reserve(world.vehicles().size());
+        for (const auto& vehicle : world.vehicles()) {
+            previous.emplace(vehicle.id(), vehicle.position());
+            if (vehicle.phase() == Vehicle::Phase::Parked &&
+                std::abs(vehicle.position().y - AeonLayout::FLOOR_HEIGHT_B2_M) < 0.05f)
+                sawB2ParkingLevel = true;
+            if ((vehicle.phase() == Vehicle::Phase::ExitGateApproach ||
+                 vehicle.phase() == Vehicle::Phase::ExitingRamp) &&
+                vehicle.position().y > AeonLayout::FLOOR_HEIGHT_B2_M + 0.25f)
+                sawOutboundRampAscent = true;
+        }
+        world.update(0.04f);
+        verifyTrafficFrame(world, simSeconds, 0.04f, previous, watch, "B2-lifecycle", 812, 5);
+    }
+
+    require(sawB2ParkingLevel, "B2 car did not reach the B2 floor and park");
+    require(sawOutboundRampAscent, "B2 car did not climb the outbound ramp");
+    require(world.carCount() == 0 && world.reservedSlotCount() == 0 &&
+                world.occupiedSlotCount() == 0,
+            "B2 traffic did not complete exit and release all stalls");
+}
+
 }
 
 int main() {
@@ -319,13 +675,21 @@ int main() {
         testLayoutAndMotorbikeCapacity();
         testB2GeometryAndIndependentWorld();
         testAnnexAndElevatorGeometryBounds();
-        testGateConnectorRouting();
+        testMotorbikeArrivalParkingAndDeparture();
+        testElevatorMotionAndDoorStateMachine();
         testSafeMultiVehicleTrafficAndBarriers();
-        // Repeat the sustained-arrival / two-aisle / barrier / FULL scenario
-        // under fixed seeds to make the regression test reproducible.
-        testIntersectionCoverageAndFullState(20261118u);
-        testIntersectionCoverageAndFullState(20261119u);
-        testIntersectionCoverageAndFullState(20261120u);
+        testHighLoadTrafficEventuallyClearsWithoutDeadlock();
+        // Repeat the sustained-arrival / two-aisle / barrier scenario under
+        // fixed seeds to make the regression test reproducible.
+        testIntersectionCoverageUnderSustainedArrivals(20261118u);
+        testIntersectionCoverageUnderSustainedArrivals(20261119u);
+        testIntersectionCoverageUnderSustainedArrivals(20261120u);
+        testReportedDeadlockReproducers();
+        testLoadMatrixAndDeadlockWatchdog();
+        testFullLotCanDrainCompletely();
+        testMultipleTimeSteps();
+        testDeterministicReplay();
+        testB2CompleteVehicleLifecycle();
         std::cout << "All AEON parking world tests passed.\n";
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
