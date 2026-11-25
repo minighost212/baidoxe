@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "car_model.h"
+#include "vehicle_models.h"
 
 inline constexpr const char* kVertexShaderSource = R"(
 #version 330 core
@@ -889,6 +890,30 @@ public:
 
         program_.use();
         lastColorValid_ = false;
+    }
+
+    // Draws any car type. `model` is T * R_y like for drawCar(); `bodyColor`
+    // paints the body panels (the Vios shader and the part tables both use it).
+    void drawVehicle(vehicle_models::Model type, const glm::mat4& model,
+                     const glm::vec3& bodyColor) const {
+        const std::vector<vehicle_models::Part>& parts = vehicle_models::partsFor(type);
+        if (parts.empty()) {
+            drawCar(model, bodyColor);   // Toyota Vios: dedicated lofted mesh
+            return;
+        }
+        for (const vehicle_models::Part& part : parts) {
+            const glm::vec3& color = part.useBodyColor ? bodyColor : part.color;
+            if (part.kind == vehicle_models::PartKind::Cylinder) {
+                drawPipe(glm::vec3(model * glm::vec4(part.a, 1.0f)),
+                         glm::vec3(model * glm::vec4(part.b, 1.0f)), part.radius, color);
+                continue;
+            }
+            const glm::mat4 partModel =
+                model * glm::translate(glm::mat4(1.0f), part.a) *
+                glm::rotate(glm::mat4(1.0f), part.tiltZ, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                glm::scale(glm::mat4(1.0f), part.b);
+            draw(boxMesh_, partModel, color);
+        }
     }
 
     // Draws a 3D cylindrical pipe between two arbitrary world points.

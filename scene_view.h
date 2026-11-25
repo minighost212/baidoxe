@@ -784,7 +784,8 @@ inline void SceneRenderer::render(const ParkingWorld& world, const ElevatorSyste
             const glm::mat4 model = glm::translate(glm::mat4(1.0f), vehicle.position()) *
                                     glm::rotate(glm::mat4(1.0f), vehicle.yaw(),
                                                 glm::vec3(0.0f, 1.0f, 0.0f));
-            renderer_.drawCar(model, glm::vec3(0.72f, 0.74f, 0.77f));
+            renderer_.drawVehicle(vehicle.model(), model,
+                                  vehicle_models::bodyColorForVehicle(vehicle.model(), vehicle.id()));
         }
         if (world.manualMode() && world.playerPosition().x <= AeonLayout::RAMP_END_X_M) {
             const glm::mat4 model = glm::translate(glm::mat4(1.0f), world.playerPosition()) *
@@ -815,7 +816,8 @@ inline void SceneRenderer::render(const ParkingWorld& world, const ElevatorSyste
         const glm::mat4 model = glm::translate(glm::mat4(1.0f), vehicle.position()) *
                                 glm::rotate(glm::mat4(1.0f), vehicle.yaw(),
                                             glm::vec3(0.0f, 1.0f, 0.0f));
-        renderer_.drawCar(model, glm::vec3(0.72f, 0.74f, 0.77f));
+        renderer_.drawVehicle(vehicle.model(), model,
+                              vehicle_models::bodyColorForVehicle(vehicle.model(), vehicle.id()));
     }
 
     if (world.manualMode()) {

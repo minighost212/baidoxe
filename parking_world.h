@@ -16,6 +16,7 @@
 #include <glm/glm.hpp>
 
 #include "aeon_layout.h"
+#include "vehicle_models.h"
 
 // Player driving request, produced by the application layer.
 struct ManualControl {
@@ -71,10 +72,15 @@ public:
     Phase phase() const { return phase_; }
     float parkedSeconds() const { return parkedSeconds_; }
     bool isActive() const { return active_; }
+    // Car type shown for this vehicle. Movement and collision checks still use
+    // the Vios-sized footprint for every type, which is conservative for the
+    // smaller cars (VF 3 is shorter and narrower than a Vios).
+    vehicle_models::Model model() const { return model_; }
 
 private:
     friend class ParkingWorld;
 
+    vehicle_models::Model model_ = vehicle_models::Model::ToyotaVios;
     int id_ = -1;
     glm::vec3 position_{0.0f};
     float yaw_ = 0.0f;
@@ -455,6 +461,7 @@ inline bool ParkingWorld::spawnVehicle() {
     if (!foundPosition) return false;
 
     Vehicle vehicle(nextVehicleId_++, spawnPosition, slotIndex);
+    vehicle.model_ = vehicle_models::modelForVehicleId(vehicle.id());
     slots_[static_cast<std::size_t>(slotIndex)].reserve(vehicle.id());
     traffic_.push_back(vehicle);
     return true;
